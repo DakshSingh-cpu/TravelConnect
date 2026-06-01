@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
-import { processAgencyDataStream } from '@/lib/agencyDataProcessor.server'
-import { getAgencyCsvPath, getCachedAgencyProfile } from '@/lib/agencyProfileCache.server'
+import path from 'path'
+import { getCachedAgencyProfile, cacheAgencyProfiles } from '@/lib/agencyProfileCache.server'
+import { getMatchDb } from '@/lib/matchAgenciesStage1'
+
+const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
 
 /**
  * GET /api/agency-profile?agencyId=50329
- * Returns a single cached or streamed AgentProfile (client fallback when session has no copy).
+ * Returns a single cached or SQLite-retrieved AgentProfile.
  */
 export async function GET(request: Request) {
   const agencyId = Number(new URL(request.url).searchParams.get('agencyId'))
@@ -18,10 +21,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    const profiles = await processAgencyDataStream(getAgencyCsvPath(), [agencyId])
-    return NextResponse.json({ profile: profiles[0] ?? null })
+    const db = getMatchDb(DB_PATH)
+    const row = db.prepare('SELECT data FROM agencies WHERE id = ?').get(agencyId) as { data: string } | undefined
+    if (row) {
+      const profile = JSON.parse(row.data)
+      cacheAgencyProfiles([profile])
+      return NextResponse.json({ profile })
+    }
+    return NextResponse.json({ profile: null })
   } catch (err) {
-    console.error('[agency-profile] CSV lookup failed:', err)
+    console.error('[agency-profile] SQLite lookup failed:', err)
     return NextResponse.json({ profile: null }, { status: 500 })
   }
 }
