@@ -3,6 +3,9 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
+  outputFileTracingIncludes: {
+    "/api/**/*": ["data/**/*"],
+  },
   turbopack: {
     root: path.join(__dirname),
   },
