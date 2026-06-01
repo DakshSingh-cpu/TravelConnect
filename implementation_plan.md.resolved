@@ -1,0 +1,41 @@
+# Layout Shift & Split-Screen Itinerary Animation Plan
+
+## Goal
+When a user clicks a destination pin on the interactive map:
+1. The map's itinerary panel should no longer overlay on top of the map. It should slide in seamlessly on the right hand side of the page.
+2. The main page layout should smoothly transition:
+   - The sticky `SidebarProfile` on the left should vanish with a clean exit animation.
+   - The remaining core content (`AboutMe`, `TripMap`, and `ReviewList`) should animate leftward to fill the space previously occupied by the profile sidebar.
+   - The final view will act as a split-screen layout where the main profile content is on the left and the specific trip itinerary is docked on the right.
+
+## Proposed Changes
+
+### 1. Lift State to the Page Level
+We will manage the map's selected pin state at the top level of the profile page (`app/advisor/priya-rajan/page.tsx`). 
+
+#### [MODIFY] `app/advisor/priya-rajan/page.tsx`
+- **Imports:** Add `useState`, `AnimatePresence`, `motion` from `framer-motion`. Import `TripPin`, `TripMapSidePanel`, and `buildTripSidePanel`.
+- **State:** Add `const [selectedPin, setSelectedPin] = useState<TripPin | null>(null)`.
+- **Grid Layout Animation:** Convert the main 2-column grid wrapper into a `<motion.div layout>`. Dynamically toggle the Tailwind grid classes:
+  - When `!selectedPin`: `grid-cols-1 md:grid-cols-[340px_1fr]`
+  - When `selectedPin`: `grid-cols-1 md:pr-[480px]` (This smoothly shifts the content left and makes room for the fixed 480px itinerary panel on the right).
+- **Conditional Rendering (Vanish effect):** 
+  - Wrap `<SidebarProfile />` in an `<AnimatePresence mode="popLayout">` so it animates out to the left (`x: -50, opacity: 0`) when a pin is selected.
+- **Pass Control to TripMap:** Pass `selectedPin` and `setSelectedPin` down to the `<TripMap />` component so it operates in controlled mode.
+- **Render the Panel:** Render `<TripMapSidePanel>` directly in `page.tsx` when a pin is selected so it acts as a page-level right-hand drawer instead of an overlay inside the map card.
+
+### 2. Verify Controlled Mode in Map Component
+The `TripMap` component was already designed to accept `selectedPin` and `onSelectedPinChange`. No major changes are needed here, as it automatically skips rendering the internal side panel if it's operating in controlled mode.
+
+## User Review Required
+
+> [!IMPORTANT]
+> The current `TripMapSidePanel` is styled to be `fixed right-0 max-w-[480px]`. By adding `md:pr-[480px]` to the main page wrapper, we ensure the main content doesn't get covered by the panel. Does this split-screen approach (Profile content left, Itinerary right) align perfectly with your vision?
+
+## Verification Plan
+1. Click a map pin: 
+   - `SidebarProfile` should smoothly slide out to the left.
+   - The remaining sections should glide left.
+   - The itinerary panel should slide in from the right edge of the screen without covering the map.
+2. Click "Close" on the itinerary or click another pin:
+   - The layout should smoothly reverse to the original state.

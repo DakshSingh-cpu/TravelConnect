@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-teal-brand: #0F6E56;
+  --color-teal-light: #E1F5EE;
+  --color-cream: #F9F6F1;
+  --color-ink: #1C1917;
+  --color-muted: #78716C;
+  --color-gold: #BA7517;
+
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+}
+
+:root,
+[data-theme="light"] {
+  --teal: #0F6E56;
+  --teal-hover: #0c5a47;
+  --teal-light: #E1F5EE;
+  --cream: #F9F6F1;
+  --ink: #1C1917;
+  --muted: #78716C;
+  --subtle: #57534e;
+  --section-label: #0f6e56;
+  --body: #44403c;
+  --gold: #BA7517;
+  --surface: #ffffff;
+  --surface-2: #F9F6F1;
+  --stat-bg: rgba(255, 255, 255, 0.65);
+  --stat-border: rgba(15, 110, 86, 0.14);
+  --border: rgba(28, 25, 23, 0.1);
+  --card-bg: rgba(255, 255, 255, 0.6);
+  --header-bg: rgba(255, 255, 255, 0.72);
+  --header-shadow: 0 1px 0 rgba(255,255,255,0.5) inset;
+  --grad-1: rgba(225,245,238,0.9);
+  --grad-2: rgba(186,117,23,0.06);
+}
+
+[data-theme="dark"] {
+  --teal: #34d399;
+  --teal-hover: #6ee7b7;
+  --teal-light: rgba(52, 211, 153, 0.14);
+  --cream: #0f1117;
+  --ink: #f4f4f5;
+  --muted: #c4c9d4;
+  --subtle: #d1d5dc;
+  --section-label: #6ee7b7;
+  --body: #e4e4e7;
+  --gold: #fbbf24;
+  --surface: #1c1f26;
+  --surface-2: #14161d;
+  --stat-bg: rgba(30, 35, 45, 0.95);
+  --stat-border: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.1);
+  --card-bg: rgba(24, 27, 34, 0.92);
+  --header-bg: rgba(14, 16, 21, 0.92);
+  --header-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+  --grad-1: rgba(52, 211, 153, 0.1);
+  --grad-2: rgba(251, 191, 36, 0.05);
+}
+
+/* Smooth transitions for every theme-aware property */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 220ms;
+  transition-timing-function: ease;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background-color: var(--cream);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: 'DM Serif Display', Georgia, serif;
+    font-weight: 400;
+    color: var(--ink);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'DM Serif Display', Georgia, serif;
+  }
+
+  .bg-cream {
+    background-color: var(--cream);
+  }
+
+  .text-teal-brand {
+    color: var(--teal);
+  }
+
+  .bg-teal-brand {
+    background-color: var(--teal);
+  }
+
+  .text-muted {
+    color: var(--muted);
+  }
+
+  .text-gold {
+    color: var(--gold);
+  }
+}
+
+/* Leaflet map overrides */
+.leaflet-container {
+  background: #e8f4f0 !important;
+  border-radius: 1rem;
+}
+
+[data-theme="dark"] .leaflet-container {
+  background: #141b18 !important;
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 16px !important;
+  box-shadow: 0 8px 32px rgba(15, 110, 86, 0.15) !important;
+  border: 1px solid rgba(15, 110, 86, 0.15) !important;
+  padding: 0 !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+}
+
+.leaflet-popup-tip {
+  background: white !important;
+}
+
+.leaflet-tooltip.trip-map-hover-tip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.leaflet-tooltip.trip-map-hover-tip::before {
+  opacity: 0 !important;
+}
+
+.custom-pin {
+  background: var(--teal);
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 12px rgba(15, 110, 86, 0.4);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+
+.custom-pin:hover {
+  transform: scale(1.25);
+}
