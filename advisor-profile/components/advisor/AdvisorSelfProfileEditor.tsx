@@ -180,7 +180,7 @@ export default function AdvisorSelfProfileEditor() {
                   Top destinations
                 </dt>
                 <dd style={{ color: 'var(--body)' }}>
-                  {agencyProfile.bookingCities.slice(0, 6).join(' · ')}
+                  {agencyProfile.bookingCities.slice(0, 6).map((c) => c.city).join(' · ')}
                 </dd>
               </div>
             )}
