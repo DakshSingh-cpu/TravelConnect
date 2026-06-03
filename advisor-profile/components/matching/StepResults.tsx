@@ -168,11 +168,6 @@ export default function StepResults({ advisors, intake, advisorBrief, onBackToPr
         </p>
       </div>
 
-      {advisorBrief && (
-        <div className="mx-auto mb-10 w-full max-w-3xl">
-          <AdvisorBriefPanel brief={advisorBrief} />
-        </div>
-      )}
 
       <motion.ul
         className="mx-auto grid w-full max-w-5xl grid-cols-1 items-start gap-6 md:grid-cols-3"

@@ -5,14 +5,12 @@ import {
   type UIMessage,
 } from 'ai'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
+import { getTextFromUIMessage } from '@/lib/chatMessages'
 function lastUserText(messages: UIMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
     if (m.role !== 'user') continue
-    const text = m.parts
-      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-      .map((p) => p.text)
-      .join('')
+    const text = getTextFromUIMessage(m)
     if (text.trim()) return text.trim()
   }
   return ''
@@ -71,7 +69,12 @@ export function createMockConciergeResponse(
         writer.write({
           type: 'tool-output-available',
           toolCallId,
-          output: { handoffInitiated: true },
+          output: {
+            handoffInitiated: true,
+            intent: 'ready_to_book',
+            confidence: 1,
+            reason: 'Demo mode handoff',
+          },
         })
       }
     },

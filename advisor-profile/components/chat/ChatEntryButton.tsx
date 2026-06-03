@@ -46,15 +46,7 @@ export default function ChatEntryButton({
           return
         }
         if (result.reason === 'advisor_not_linked') {
-          // Fallback to our demo advisor (AEROTOUR MM) so the demo flow still works
-          const fallback = await openChatWithAdvisor('agency-110381')
-          if (fallback.ok) {
-            alert(`Demo Notice: ${firstName} hasn't claimed their profile yet. For this demo, we are redirecting you to chat with our test advisor (AEROTOUR MM) instead!`)
-            resumeAfterAuth.current = false
-            router.push(`/chat/${fallback.conversationId}`)
-          } else {
-            alert('Demo Notice: This advisor has not set up their messaging inbox yet.')
-          }
+          alert('This advisor has not set up their messaging inbox yet.')
           setBusy(false)
           return
         }

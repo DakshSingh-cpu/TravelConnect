@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import MessageBubble from '@/components/chat/MessageBubble'
+import BriefPill from '@/components/chat/BriefPill'
 import { useChatMessages } from '@/hooks/useChatMessages'
+import { useConversationBrief } from '@/hooks/useConversationBrief'
 import { isLinkedTravelAdvisor } from '@/lib/chat/peerRole'
+import { matchResultsHref } from '@/lib/matchSession'
 import type { ChatUser } from '@/lib/chat/types'
 
 type Props = {
@@ -44,6 +47,7 @@ export default function ChatMain({
     conversationId,
     currentUserId,
   )
+  const { brief } = useConversationBrief(conversationId, viewerIsAdvisor)
   const [draft, setDraft] = useState('')
   const [peerIsAdvisor, setPeerIsAdvisor] = useState<boolean | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -111,8 +115,8 @@ export default function ChatMain({
             {peerSubtitle(peerIsAdvisor, viewerIsAdvisor)}
           </p>
         </div>
-        <Link href="/" className="hidden text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
-          Home
+        <Link href={viewerIsAdvisor ? '/' : matchResultsHref()} className="hidden text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
+          {viewerIsAdvisor ? 'Home' : 'Matches'}
         </Link>
       </header>
 
@@ -140,6 +144,8 @@ export default function ChatMain({
         )}
 
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
+          {/* Brief pill — advisor-only, always visible when a brief exists */}
+          {viewerIsAdvisor && brief && <BriefPill brief={brief} />}
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} isOwn={msg.sender_id === currentUserId} />
           ))}

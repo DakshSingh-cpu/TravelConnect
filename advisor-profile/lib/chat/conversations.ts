@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/client'
 import { ensureMyProfile } from '@/lib/chat/ensureProfile'
+import { saveConversationBrief } from '@/lib/chat/conversationBrief'
+import { readAdvisorBrief } from '@/lib/advisorBrief'
 
 /** Resolve a Supabase user id from an app advisor route id (e.g. `agency-123`). */
 export async function resolveAdvisorUserId(advisorRouteId: string): Promise<string | null> {
@@ -66,5 +68,12 @@ export async function openChatWithAdvisor(advisorRouteId: string): Promise<
   }
 
   const conversationId = await getOrCreateDirectConversation(peerUserId)
+
+  // Fire-and-forget: persist brief so advisor can read it cross-client
+  const brief = readAdvisorBrief()
+  if (brief) {
+    void saveConversationBrief(conversationId, brief)
+  }
+
   return { ok: true, conversationId }
 }

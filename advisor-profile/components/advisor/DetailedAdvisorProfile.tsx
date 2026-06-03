@@ -268,7 +268,7 @@ export default function DetailedAdvisorProfile({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-                className="sticky top-24 min-w-0 self-start"
+                className="min-w-0 self-start md:sticky md:top-24"
               >
                 <SidebarProfile persona={persona} agentProfile={agentProfile} />
               </motion.div>

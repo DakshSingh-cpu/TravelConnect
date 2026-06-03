@@ -7,7 +7,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ConciergeMessageBody from '@/components/matching/ConciergeMessageBody'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
-import { getTextFromUIMessage, hasCompletedHandoffTool } from '@/lib/chatMessages'
+import {
+  getTextFromUIMessage,
+  hasCompletedHandoffTool,
+  getHandoffToolOutput,
+  messageHasAcceptedHandoff,
+} from '@/lib/chatMessages'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 
 const SUGGESTED_PROMPTS = [
@@ -51,6 +56,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
   const [phase, setPhase] = useState<Phase>('chat')
   const [input, setInput] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
+  const [handoffReason, setHandoffReason] = useState<string | null>(null)
   const handoffStarted = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -81,6 +87,10 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
       handoffStarted.current = true
       stop()
       setTransferError(null)
+
+      const toolOutput = getHandoffToolOutput(msgs)
+      setHandoffReason(toolOutput?.reason ?? null)
+
       setPhase('transferring')
 
       try {
@@ -97,6 +107,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
       } catch {
         setTransferError('Could not prepare your brief. Please try again.')
         handoffStarted.current = false
+        setHandoffReason(null)
         setPhase('chat')
       }
     },
@@ -275,7 +286,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
                       …
                     </span>
                   )}
-                  {message.parts.some((p) => p.type === 'tool-initiate_human_handoff') && (
+                  {messageHasAcceptedHandoff(message) && (
                     <p className="mt-3 text-xs font-medium" style={{ color: 'var(--teal)' }}>
                       Connecting you with a human advisor…
                     </p>

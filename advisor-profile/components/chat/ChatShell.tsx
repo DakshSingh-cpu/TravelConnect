@@ -117,7 +117,7 @@ export default function ChatShell({ activeConversationId }: Props) {
               conversationId={activeConversationId}
               currentUserId={user.id}
               peer={activePeer}
-              viewerIsAdvisor={Boolean(advisorLink)}
+              viewerIsAdvisor={isAdvisor}
               showBackOnMobile
               onBack={() => router.push('/chat')}
             />

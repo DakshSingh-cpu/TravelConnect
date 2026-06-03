@@ -216,7 +216,7 @@ function computeQuality(profile: AgentProfile): number {
 
 // ── Main Scoring Pipeline ───────────────────────────────────────────────────
 
-export function matchAgencies(dbPath: string, intake: MatchIntakeInput): ScoredAgency[] {
+export function matchAgencies(dbPath: string, intake: MatchIntakeInput, options?: { limit?: number }): ScoredAgency[] {
   const db = getMatchDb(dbPath)
   const { agencyIds, tierMap, targetBookings } = retrieveCandidates(db, intake.destination)
 
@@ -264,7 +264,8 @@ export function matchAgencies(dbPath: string, intake: MatchIntakeInput): ScoredA
   })
 
   scored.sort((a, b) => b.totalScore - a.totalScore)
-  const top = scored.slice(0, 3)
+  const limit = options?.limit ?? 3
+  const top = scored.slice(0, limit)
 
   for (const s of top) {
     s.matchReasons = buildReasons(s, intake, targetBookings.get(s.profile.agencyId) ?? 0)

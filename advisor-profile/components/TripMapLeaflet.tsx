@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useCityImage } from '@/hooks/useCityImage'
 import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
 import type { AgentMapPin } from '@/lib/agencyDataProcessor'
 import { buildMapPinHover, mapPinOpacity, mapPinRadius } from '@/lib/mapPinExperience'
@@ -94,25 +95,26 @@ function MapFitBounds({ pins }: { pins: AgentMapPin[] }) {
   return null
 }
 
-function HoverCard({ data, pinLabel }: { data: TripHoverCard; pinLabel: string }) {
+function HoverCard({ pinLabel }: { data: TripHoverCard; pinLabel: string }) {
+  const { imageUrl, isLoading } = useCityImage(pinLabel)
+
   return (
-    <div className="w-72 overflow-hidden rounded-2xl border border-stone-700 bg-stone-900 text-left shadow-2xl ring-1 ring-black/50">
-      <div className="relative h-40 w-full shrink-0">
-        <img src={data.heroImage} className="h-full w-full object-cover" alt="" loading="lazy" />
+    <div className="w-72 overflow-hidden rounded-2xl border border-stone-700/60 bg-stone-900 text-left shadow-2xl ring-1 ring-black/50">
+      <div className="relative h-40 w-full shrink-0 bg-stone-950">
+        {isLoading ? (
+          <div className="h-full w-full animate-pulse bg-stone-800" />
+        ) : (
+          <img
+            src={imageUrl ?? ''}
+            className="h-full w-full object-cover transition-opacity duration-500 opacity-100"
+            alt={pinLabel}
+            loading="lazy"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/20 to-transparent" />
-      </div>
-      <div className="space-y-1.5 p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="font-display text-lg leading-snug text-white">{pinLabel}</p>
-          <p className="text-xs text-stone-300">
-            ★ {data.rating}{' '}
-            <span className="text-stone-500">{data.reviewLabel}</span>
-          </p>
-        </div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{data.category}</p>
-        <p className="line-clamp-1 text-xs text-stone-500">{data.locationLine}</p>
-        <p className="line-clamp-3 text-xs leading-relaxed text-stone-300">{data.teaser}</p>
-        <p className="border-t border-stone-800 pt-3 text-[10px] text-stone-500">{data.mentionedBy}</p>
+        <p className="absolute bottom-3 left-4 font-display text-lg font-semibold leading-snug text-white drop-shadow-md">
+          {pinLabel}
+        </p>
       </div>
     </div>
   )
@@ -181,9 +183,6 @@ export default function TripMapLeaflet(props: Props) {
                 color: '#fff',
                 weight: selected ? 3 : 2,
               }}
-              eventHandlers={{
-                click: () => onSelectPin(pin),
-              }}
             >
               <Tooltip
                 direction="top"
@@ -226,9 +225,6 @@ export default function TripMapLeaflet(props: Props) {
               fillOpacity: selected ? 1 : 0.92,
               color: '#fff',
               weight: selected ? 3 : 2,
-            }}
-            eventHandlers={{
-              click: () => onSelectPin(pin),
             }}
           >
             <Tooltip

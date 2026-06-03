@@ -8,6 +8,8 @@ import {
   parseIntakeBody,
   type MatchIntakePayload,
 } from '@/lib/matchAdvisors'
+import { evaluateHandoffGate, EXPLICIT_OVERRIDE_REGEX } from '@/lib/handoffGates'
+import { getTextFromUIMessage } from '@/lib/chatMessages'
 
 export const maxDuration = 60
 
@@ -62,16 +64,66 @@ export async function POST(req: Request) {
   const tools = {
     initiate_human_handoff: tool({
       description:
-        'Call this tool ONLY when the user shows strong intent to book, asks for specific pricing/availability, or explicitly asks to speak to a human advisor. Do not call for general brainstorming.',
+        'Call when the user is ready to book, asks for pricing/availability, or explicitly asks for a human advisor. Provide your assessment of their intent and confidence.',
       inputSchema: z.object({
+        intent: z
+          .enum(['exploring', 'ready_to_book'])
+          .describe('User intent: exploring options or ready to book'),
+        confidence: z
+          .number()
+          .min(0)
+          .max(1)
+          .describe('Confidence (0-1) that the user wants a human advisor now'),
         reason: z
           .string()
           .describe('Brief reason for handoff, e.g. ready to book or asked for pricing'),
+        captured_slots: z
+          .object({
+            budget: z.string().optional().describe('Confirmed budget if discussed'),
+            pax: z.number().nullable().optional().describe('Group size if mentioned'),
+            dates: z.string().optional().describe('Travel dates if mentioned'),
+          })
+          .describe('Slots captured during the conversation'),
       }),
-      execute: async ({ reason }) => ({
-        handoffInitiated: true,
-        reason,
-      }),
+      execute: async ({ intent, confidence, reason }) => {
+        const userTurnCount = messages.filter(
+          (m: UIMessage) => m.role === 'user',
+        ).length
+
+        const lastUserMsg = [...messages]
+          .reverse()
+          .find((m: UIMessage) => m.role === 'user')
+        const lastUserText = lastUserMsg
+          ? getTextFromUIMessage(lastUserMsg)
+          : ''
+        const override = EXPLICIT_OVERRIDE_REGEX.test(lastUserText)
+
+        const gate = evaluateHandoffGate({
+          override,
+          confidence,
+          intent,
+          userTurnCount,
+        })
+
+        console.log('[handoff]', {
+          decision: gate.accepted ? 'accepted' : 'rejected',
+          intent,
+          confidence,
+          userTurnCount,
+          override,
+          gateReason: gate.reason,
+        })
+
+        if (gate.accepted) {
+          return { handoffInitiated: true as const, reason }
+        }
+
+        return {
+          handoffInitiated: false as const,
+          reason: gate.reason,
+          suggestedFollowUp: gate.suggestedFollowUp,
+        }
+      },
     }),
   }
 

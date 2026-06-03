@@ -51,7 +51,7 @@ export default function SidebarProfile({ persona, agentProfile }: Props) {
   ]
 
   return (
-    <aside className="sticky top-24 flex flex-col gap-6 self-start">
+    <aside className="flex flex-col gap-6 self-start md:sticky md:top-24">
       <div
         className="rounded-2xl p-6 shadow-lg backdrop-blur-xl"
         style={{
