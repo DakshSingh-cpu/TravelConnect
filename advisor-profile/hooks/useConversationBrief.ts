@@ -16,13 +16,14 @@ export function useConversationBrief(
   useEffect(() => {
     if (!conversationId || !viewerIsAdvisor) {
       setBrief(null)
+      setLoading(false)
       return
     }
 
     let cancelled = false
     setLoading(true)
 
-    fetchConversationBrief(conversationId).then((result) => {
+    void fetchConversationBrief(conversationId).then((result) => {
       if (!cancelled) {
         setBrief(result)
         setLoading(false)

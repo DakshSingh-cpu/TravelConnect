@@ -253,7 +253,6 @@ export default function MatchingIntakePage() {
             <StepResults
               advisors={matchedAdvisors}
               intake={intakePayload}
-              advisorBrief={advisorBrief}
               onBackToPreferences={() => {
                 setMatchedAdvisors(null)
                 setAdvisorBrief(null)

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import MessageBubble from '@/components/chat/MessageBubble'
 import BriefPill from '@/components/chat/BriefPill'
+import ClientBriefBanner from '@/components/chat/ClientBriefBanner'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { useConversationBrief } from '@/hooks/useConversationBrief'
+import { useTravellerBriefSync } from '@/hooks/useTravellerBriefSync'
 import { isLinkedTravelAdvisor } from '@/lib/chat/peerRole'
 import { matchResultsHref } from '@/lib/matchSession'
 import type { ChatUser } from '@/lib/chat/types'
@@ -47,7 +49,8 @@ export default function ChatMain({
     conversationId,
     currentUserId,
   )
-  const { brief } = useConversationBrief(conversationId, viewerIsAdvisor)
+  const { brief, loading: briefLoading } = useConversationBrief(conversationId, viewerIsAdvisor)
+  const { syncNotice } = useTravellerBriefSync(conversationId, !viewerIsAdvisor)
   const [draft, setDraft] = useState('')
   const [peerIsAdvisor, setPeerIsAdvisor] = useState<boolean | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -144,8 +147,24 @@ export default function ChatMain({
         )}
 
         <div className="mx-auto flex max-w-3xl flex-col gap-2">
-          {/* Brief pill — advisor-only, always visible when a brief exists */}
-          {viewerIsAdvisor && brief && <BriefPill brief={brief} />}
+          {syncNotice && (
+            <p
+              className="rounded-xl border px-4 py-2.5 text-center text-xs leading-relaxed"
+              style={{ borderColor: 'rgba(185,28,28,0.25)', background: '#fef2f2', color: '#b91c1c' }}
+              role="alert"
+            >
+              {syncNotice}
+            </p>
+          )}
+
+          {viewerIsAdvisor && (
+            <div className="sticky top-0 z-10 pb-1 pt-0">
+              {briefLoading && <ClientBriefBanner variant="loading" />}
+              {!briefLoading && brief && <BriefPill brief={brief} />}
+              {!briefLoading && !brief && <ClientBriefBanner variant="empty" />}
+            </div>
+          )}
+
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} isOwn={msg.sender_id === currentUserId} />
           ))}

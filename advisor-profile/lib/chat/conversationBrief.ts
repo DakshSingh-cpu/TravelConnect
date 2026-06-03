@@ -1,6 +1,11 @@
 import { createClient } from '@/lib/supabase/client'
-import { advisorBriefSchema } from '@/lib/advisorBrief'
+import type { Json } from '@/lib/supabase/database.types'
+import { advisorBriefSchema, readAdvisorBrief } from '@/lib/advisorBrief'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
+
+export type SaveConversationBriefResult =
+  | { ok: true }
+  | { ok: false; error: string }
 
 /**
  * Saves an AdvisorBrief for a conversation.
@@ -9,13 +14,19 @@ import type { AdvisorBrief } from '@/lib/advisorBrief'
 export async function saveConversationBrief(
   conversationId: string,
   brief: AdvisorBrief,
-): Promise<void> {
+): Promise<SaveConversationBriefResult> {
   const supabase = createClient()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any).from('conversation_briefs').upsert(
-    { conversation_id: conversationId, brief },
+  const { error } = await supabase.from('conversation_briefs').upsert(
+    { conversation_id: conversationId, brief: brief as unknown as Json },
     { onConflict: 'conversation_id' },
   )
+
+  if (error) {
+    console.error('[conversation_briefs] upsert failed', { code: error.code })
+    return { ok: false, error: error.message }
+  }
+
+  return { ok: true }
 }
 
 /**
@@ -26,8 +37,7 @@ export async function fetchConversationBrief(
   conversationId: string,
 ): Promise<AdvisorBrief | null> {
   const supabase = createClient()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from('conversation_briefs')
     .select('brief')
     .eq('conversation_id', conversationId)
@@ -37,4 +47,23 @@ export async function fetchConversationBrief(
 
   const parsed = advisorBriefSchema.safeParse(data.brief)
   return parsed.success ? parsed.data : null
+}
+
+/**
+ * If the traveller has a session brief and this conversation has none yet, persist it.
+ */
+export async function syncSessionBriefToConversation(
+  conversationId: string,
+): Promise<SaveConversationBriefResult | { ok: true; skipped: true }> {
+  const sessionBrief = readAdvisorBrief()
+  if (!sessionBrief) {
+    return { ok: true, skipped: true }
+  }
+
+  const existing = await fetchConversationBrief(conversationId)
+  if (existing) {
+    return { ok: true, skipped: true }
+  }
+
+  return saveConversationBrief(conversationId, sessionBrief)
 }

@@ -4,9 +4,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { matchResultsHref } from '@/lib/matchSession'
-import AdvisorBriefPanel from '@/components/AdvisorBriefPanel'
-import type { AdvisorBrief } from '@/lib/advisorBrief'
-import { readAdvisorBrief } from '@/lib/advisorBrief'
 import AdvisorIntroduction from '@/components/advisor/AdvisorIntroduction'
 import SidebarProfile from '@/components/SidebarProfile'
 import TripMap from '@/components/TripMap'
@@ -46,7 +43,6 @@ export default function DetailedAdvisorProfile({
 
   const [selectedPin, setSelectedPin] = useState<TripPin | null>(null)
   const [selectedMapPin, setSelectedMapPin] = useState<AgentMapPin | null>(null)
-  const [advisorBrief, setAdvisorBrief] = useState<AdvisorBrief | null>(null)
 
   // Edit profile state
   const [editing, setEditing] = useState(false)
@@ -54,10 +50,6 @@ export default function DetailedAdvisorProfile({
   const [editVideoUrl, setEditVideoUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState<{ text: string; ok: boolean } | null>(null)
-
-  useEffect(() => {
-    setAdvisorBrief(readAdvisorBrief())
-  }, [])
 
   function handleStartEdit() {
     const intro = getAdvisorIntroduction(persona, agentProfile)

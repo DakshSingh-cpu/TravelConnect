@@ -4,8 +4,6 @@ import { motion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import AdvisorBriefPanel from '@/components/AdvisorBriefPanel'
-import type { AdvisorBrief } from '@/lib/advisorBrief'
 import type { MatchIntakePayload, EnrichedMatchedAdvisor } from '@/lib/matchAdvisors'
 import type { MatchReason } from '@/lib/matchAgenciesStage1'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
@@ -142,11 +140,10 @@ function AdvisorExpertisePanel({ profile }: { profile: AgentProfile }) {
 type Props = {
   advisors: EnrichedMatchedAdvisor[]
   intake: MatchIntakePayload | null
-  advisorBrief?: AdvisorBrief | null
   onBackToPreferences?: () => void
 }
 
-export default function StepResults({ advisors, intake, advisorBrief, onBackToPreferences }: Props) {
+export default function StepResults({ advisors, intake, onBackToPreferences }: Props) {
   const router = useRouter()
 
   const summary =

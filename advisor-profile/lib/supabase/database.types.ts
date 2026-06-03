@@ -103,6 +103,30 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_briefs: {
+        Row: {
+          conversation_id: string
+          brief: Json
+          created_at: string
+        }
+        Insert: {
+          conversation_id: string
+          brief: Json
+          created_at?: string
+        }
+        Update: {
+          brief?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_briefs_conversation_id_fkey'
+            columns: ['conversation_id']
+            isOneToOne: true
+            referencedRelation: 'conversations'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: Record<string, never>
     Functions: {

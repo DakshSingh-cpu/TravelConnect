@@ -47,7 +47,7 @@ export async function getOrCreateDirectConversation(peerUserId: string): Promise
  * Returns `{ conversationId }` or `{ needsAuth: true }` when there is no session.
  */
 export async function openChatWithAdvisor(advisorRouteId: string): Promise<
-  | { ok: true; conversationId: string }
+  | { ok: true; conversationId: string; briefSaveFailed?: boolean }
   | { ok: false; reason: 'not_authenticated' }
   | { ok: false; reason: 'advisor_not_linked'; advisorRouteId: string }
 > {
@@ -69,11 +69,14 @@ export async function openChatWithAdvisor(advisorRouteId: string): Promise<
 
   const conversationId = await getOrCreateDirectConversation(peerUserId)
 
-  // Fire-and-forget: persist brief so advisor can read it cross-client
+  let briefSaveFailed = false
   const brief = readAdvisorBrief()
   if (brief) {
-    void saveConversationBrief(conversationId, brief)
+    const saveResult = await saveConversationBrief(conversationId, brief)
+    if (!saveResult.ok) {
+      briefSaveFailed = true
+    }
   }
 
-  return { ok: true, conversationId }
+  return { ok: true, conversationId, briefSaveFailed }
 }

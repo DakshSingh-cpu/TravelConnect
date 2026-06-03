@@ -53,6 +53,11 @@ export default function ChatEntryButton({
       }
 
       resumeAfterAuth.current = false
+      if (result.briefSaveFailed) {
+        setError(
+          'Chat opened, but your trip brief could not be saved for the advisor. Open chat from match results again or reload this thread.',
+        )
+      }
       router.push(`/chat/${result.conversationId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open chat')

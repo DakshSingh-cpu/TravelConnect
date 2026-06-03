@@ -13,7 +13,7 @@ export default function AdvisorBriefPanel({ brief, compact = false }: Props) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border text-left shadow-sm backdrop-blur-md ${
+      className={`rounded-2xl border text-left shadow-sm backdrop-blur-md overflow-y-auto max-h-[65vh] ${
         compact ? 'p-4' : 'p-5'
       }`}
       style={{
