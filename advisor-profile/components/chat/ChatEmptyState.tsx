@@ -36,9 +36,8 @@ export default function ChatEmptyState({ variant, advisorRouteId, needsAdvisorLi
 
       {isAdvisor && needsAdvisorLink && (
         <p className="mt-4 max-w-sm text-xs leading-relaxed rounded-xl border px-4 py-3" style={{ borderColor: 'var(--border)', color: 'var(--muted)', background: 'var(--surface)' }}>
-          Open the <strong style={{ color: 'var(--ink)' }}>TA</strong> menu (top right) and tap{' '}
-          <strong style={{ color: 'var(--teal)' }}>Enable Advisor Mode (Demo)</strong> to link your account to your
-          agency profile.
+          Your travel advisor account is not linked to an agency profile yet. Contact your administrator to complete
+          setup, or use the profile menu once a demo link is available for your account.
         </p>
       )}
 

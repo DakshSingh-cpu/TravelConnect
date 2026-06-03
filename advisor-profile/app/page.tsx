@@ -15,6 +15,11 @@ import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 import AuthModal from '@/components/auth/AuthModal'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
+import {
+  fetchMyAccountRole,
+  persistAccountRoleIntent,
+  setMyAccountRole,
+} from '@/lib/accountRole'
 
 export default function MatchingIntakePage() {
   const router = useRouter()
@@ -56,9 +61,40 @@ export default function MatchingIntakePage() {
     [intakePayload, advisorBrief],
   )
 
-  function handleAdvisorClick() {
+  async function handleTravellerStart() {
     if (user) {
-      router.push('/chat?as=advisor')
+      const role = await fetchMyAccountRole()
+      if (role === 'advisor') {
+        alert(
+          'This account is registered as a Travel Advisor. Sign in via “I am a Travel Advisor” to open your client inbox.',
+        )
+        return
+      }
+      try {
+        await setMyAccountRole('traveller')
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Could not start traveller flow')
+        return
+      }
+    } else {
+      persistAccountRoleIntent('traveller')
+    }
+    setCurrentStep(0)
+  }
+
+  async function handleAdvisorClick() {
+    if (user) {
+      const role = await fetchMyAccountRole()
+      if (role === 'traveller') {
+        alert(
+          'This account is registered as a Traveller. Use “I am a Traveller” to find and message advisors.',
+        )
+        return
+      }
+    }
+    persistAccountRoleIntent('advisor')
+    if (user) {
+      router.push('/chat')
     } else {
       setAdvisorAuthOpen(true)
     }
@@ -127,8 +163,9 @@ export default function MatchingIntakePage() {
         onClose={() => setAdvisorAuthOpen(false)}
         onAuthenticated={() => {
           setAdvisorAuthOpen(false)
-          router.push('/chat?as=advisor')
+          router.push('/chat')
         }}
+        accountRole="advisor"
         title="Advisor sign in"
         subtitle="Sign in to access your advisor inbox and manage client conversations."
       />
@@ -142,8 +179,8 @@ export default function MatchingIntakePage() {
       >
         {currentStep === -1 && (
           <RoleSelectionScreen
-            onTraveller={() => setCurrentStep(0)}
-            onAdvisor={handleAdvisorClick}
+            onTraveller={() => void handleTravellerStart()}
+            onAdvisor={() => void handleAdvisorClick()}
           />
         )}
 

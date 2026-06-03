@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAdvisorLink } from '@/hooks/useAdvisorLink'
+import { useAccountRole } from '@/hooks/useAccountRole'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { parseAgencyIdFromAdvisorRoute } from '@/lib/matchAdvisors'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
 
 export default function AdvisorSelfProfileEditor() {
   const { user, loading: sessionLoading } = useSupabaseSession()
+  const { accountRole } = useAccountRole(user?.id ?? null)
   const { advisorLink, loading: linkLoading } = useAdvisorLink(user?.id ?? null)
 
   const [agencyProfile, setAgencyProfile] = useState<AgentProfile | null>(null)
@@ -97,12 +99,25 @@ export default function AdvisorSelfProfileEditor() {
     )
   }
 
+  if (accountRole === 'traveller') {
+    return (
+      <div className="mx-auto max-w-lg py-16 px-4 text-center">
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+          This page is for travel advisors only. Your account is registered as a Traveller.
+        </p>
+        <Link href="/" className="mt-6 inline-block text-sm font-semibold" style={{ color: 'var(--teal)' }}>
+          Find advisors →
+        </Link>
+      </div>
+    )
+  }
+
   if (!advisorLink) {
     return (
       <div className="mx-auto max-w-lg py-16 px-4 text-center">
         <p className="text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
-          Your account is not linked to an advisor profile yet. Use &ldquo;Enable Advisor Mode&rdquo; from the profile
-          menu on the inbox, or ask an admin to link your account in Supabase.
+          Your advisor account is not linked to an agency profile yet. Ask an administrator to link your account in
+          Supabase.
         </p>
         <Link
           href="/chat"

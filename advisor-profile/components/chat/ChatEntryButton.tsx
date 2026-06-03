@@ -101,6 +101,7 @@ export default function ChatEntryButton({
           resumeAfterAuth.current = true
           setAuthOpen(false)
         }}
+        accountRole="traveller"
         title={`Chat with ${firstName}`}
         subtitle="Sign in to send a message to your advisor."
       />

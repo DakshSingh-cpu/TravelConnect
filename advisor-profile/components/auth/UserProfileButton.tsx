@@ -3,21 +3,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ensureMyProfileOptional } from '@/lib/chat/ensureProfile'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { useAdvisorLink } from '@/hooks/useAdvisorLink'
+import { useAccountRole } from '@/hooks/useAccountRole'
+import { roleLabel } from '@/lib/accountRole'
 
 export default function UserProfileButton() {
   const router = useRouter()
   const { user, loading } = useSupabaseSession()
+  const { accountRole, loading: roleLoading } = useAccountRole(user?.id ?? null)
   const { advisorLink, loading: advisorLoading } = useAdvisorLink(user?.id ?? null)
   const [open, setOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [enablingAdvisor, setEnablingAdvisor] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
 
-  // Close on outside click
+  const isAdvisor = accountRole === 'advisor'
+
   useEffect(() => {
     if (!open) return
     function onPointerDown(e: PointerEvent) {
@@ -45,15 +47,22 @@ export default function UserProfileButton() {
     (user.user_metadata?.avatar_url as string | undefined) ??
     (user.user_metadata?.picture as string | undefined)
 
-  // Build initials: up to 2 letters from full_name, or first letter of email
   const initials = fullName
     ? fullName
-      .split(' ')
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
+        .split(' ')
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase()
     : email[0]?.toUpperCase() ?? '?'
+
+  const badgeLabel = roleLoading
+    ? '…'
+    : accountRole
+      ? roleLabel(accountRole)
+      : advisorLink
+        ? 'Travel Advisor'
+        : 'Traveller'
 
   async function handleSignOut() {
     setSigningOut(true)
@@ -64,29 +73,8 @@ export default function UserProfileButton() {
     window.location.reload()
   }
 
-  // Demo helper: link current user to AEROTOUR MM for testing
-  async function handleEnableAdvisorMode() {
-    if (!user) return
-    setEnablingAdvisor(true)
-    const supabase = createClient()
-    await ensureMyProfileOptional()
-    const { error } = await supabase.from('advisor_user_links').upsert(
-      { advisor_route_id: 'agency-110381', user_id: user.id },
-      { onConflict: 'advisor_route_id' },
-    )
-    setEnablingAdvisor(false)
-    if (error) {
-      console.error(error)
-      alert(`Could not link advisor: ${error.message}. You likely need to add an INSERT policy to advisor_user_links in Supabase.`)
-      return
-    }
-    setOpen(false)
-    router.push('/chat')
-  }
-
   return (
     <div className="relative">
-      {/* Avatar button */}
       <button
         ref={buttonRef}
         id="user-profile-btn"
@@ -106,7 +94,6 @@ export default function UserProfileButton() {
         )}
       </button>
 
-      {/* Dropdown panel */}
       {open && (
         <div
           ref={panelRef}
@@ -119,7 +106,6 @@ export default function UserProfileButton() {
             borderColor: 'var(--border)',
           }}
         >
-          {/* Header gradient strip */}
           <div
             className="h-14"
             style={{
@@ -127,7 +113,6 @@ export default function UserProfileButton() {
             }}
           />
 
-          {/* Avatar floating over gradient */}
           <div className="relative -mt-8 px-5">
             <div
               className="flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold text-white shadow-lg ring-4 overflow-hidden"
@@ -144,7 +129,6 @@ export default function UserProfileButton() {
             </div>
           </div>
 
-          {/* User details */}
           <div className="px-5 pb-2 pt-3">
             {fullName && (
               <p className="text-base font-semibold leading-tight" style={{ color: 'var(--ink)' }}>
@@ -160,10 +144,8 @@ export default function UserProfileButton() {
             </p>
           </div>
 
-          {/* Divider */}
           <div className="mx-5 my-2" style={{ height: '1px', background: 'var(--border)' }} />
 
-          {/* Meta row */}
           <div className="px-5 pb-2">
             <div className="flex items-center gap-2">
               <span
@@ -173,7 +155,7 @@ export default function UserProfileButton() {
                 <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden>
                   <circle cx="6" cy="6" r="6" />
                 </svg>
-                {advisorLink ? 'Travel Advisor' : 'Traveller'}
+                {badgeLabel}
               </span>
               <span className="text-xs" style={{ color: 'var(--muted)' }}>
                 {user.app_metadata?.provider === 'google' ? 'via Google' : 'via Email'}
@@ -181,8 +163,7 @@ export default function UserProfileButton() {
             </div>
           </div>
 
-          {/* Advisor-specific quick links */}
-          {!advisorLoading && advisorLink && (
+          {!advisorLoading && isAdvisor && advisorLink && (
             <div className="flex flex-col gap-2 px-5 pb-2">
               <button
                 id="advisor-inbox-btn"
@@ -234,31 +215,16 @@ export default function UserProfileButton() {
             </div>
           )}
 
-          {/* Enable advisor mode (demo) for non-advisor users */}
-          {!advisorLoading && !advisorLink && (
+          {!advisorLoading && isAdvisor && !advisorLink && (
             <div className="px-5 pb-2">
-              <button
-                id="enable-advisor-mode-btn"
-                type="button"
-                disabled={enablingAdvisor}
-                onClick={() => void handleEnableAdvisorMode()}
-                className="flex w-full items-center gap-2 rounded-xl border border-dashed px-3 py-2.5 text-xs font-semibold transition-colors hover:bg-[rgba(15,110,86,0.05)] disabled:opacity-60"
-                style={{ borderColor: 'var(--teal)', color: 'var(--teal)' }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="16" />
-                  <line x1="8" y1="12" x2="16" y2="12" />
-                </svg>
-                {enablingAdvisor ? 'Enabling…' : 'Enable Advisor Mode (Demo)'}
-              </button>
+              <p className="rounded-xl border px-3 py-2.5 text-xs leading-relaxed" style={{ borderColor: 'var(--border)', color: 'var(--muted)' }}>
+                Your advisor account is not linked to an agency profile yet. Contact support to complete setup.
+              </p>
             </div>
           )}
 
-          {/* Divider */}
           <div className="mx-5 my-2" style={{ height: '1px', background: 'var(--border)' }} />
 
-          {/* Sign out */}
           <div className="px-5 pb-5">
             <button
               id="sign-out-btn"

@@ -14,17 +14,20 @@ export type Database = {
           id: string
           full_name: string | null
           avatar_url: string | null
+          account_role: 'traveller' | 'advisor'
           updated_at: string
         }
         Insert: {
           id: string
           full_name?: string | null
           avatar_url?: string | null
+          account_role?: 'traveller' | 'advisor'
           updated_at?: string
         }
         Update: {
           full_name?: string | null
           avatar_url?: string | null
+          account_role?: 'traveller' | 'advisor'
           updated_at?: string
         }
         Relationships: []
@@ -114,6 +117,10 @@ export type Database = {
       is_conversation_participant: {
         Args: { p_conversation_id: string }
         Returns: boolean
+      }
+      set_my_account_role: {
+        Args: { p_role: 'traveller' | 'advisor' }
+        Returns: string
       }
     }
     Enums: Record<string, never>

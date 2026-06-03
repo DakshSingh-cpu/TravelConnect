@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { ensureMyProfileOptional } from '@/lib/chat/ensureProfile'
+import {
+  applyAccountRoleIntentIfNeeded,
+  fetchMyAccountRole,
+  roleLabel,
+  setMyAccountRole,
+  type AccountRole,
+} from '@/lib/accountRole'
 
 type Mode = 'sign_in' | 'sign_up'
 
@@ -13,6 +20,8 @@ type Props = {
   onAuthenticated?: () => void
   title?: string
   subtitle?: string
+  /** Set immutable account role on successful sign-in (sign-up or sign-in). */
+  accountRole?: AccountRole
 }
 
 export default function AuthModal({
@@ -22,6 +31,7 @@ export default function AuthModal({
 
   title = 'Sign in to continue',
   subtitle = 'Create an account or sign in to message your advisor.',
+  accountRole,
 }: Props) {
   const [mode, setMode] = useState<Mode>('sign_in')
   const [email, setEmail] = useState('')
@@ -54,11 +64,31 @@ export default function AuthModal({
           },
         })
         if (error) throw error
+        if (accountRole) {
+          try {
+            await setMyAccountRole(accountRole)
+          } catch {
+            /* role may be set after email confirmation on first sign-in */
+          }
+        }
         setMessage('Check your email to confirm your account, then sign in.')
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         await ensureMyProfileOptional()
+        if (accountRole) {
+          const existing = await fetchMyAccountRole()
+          if (existing && existing !== accountRole) {
+            throw new Error(
+              `This account is registered as a ${roleLabel(existing)}. Use the correct sign-in path for your account type.`,
+            )
+          }
+          if (!existing) {
+            await setMyAccountRole(accountRole)
+          }
+        } else {
+          await applyAccountRoleIntentIfNeeded()
+        }
         onAuthenticated?.()
         onClose()
       }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import AuthModal from '@/components/auth/AuthModal'
 import UserProfileButton from '@/components/auth/UserProfileButton'
 import ChatEmptyState from '@/components/chat/ChatEmptyState'
@@ -10,6 +10,7 @@ import ChatSidebar from '@/components/chat/ChatSidebar'
 import { fetchConversationPeer } from '@/lib/chat/peer'
 import type { ChatUser } from '@/lib/chat/types'
 import { useAdvisorLink } from '@/hooks/useAdvisorLink'
+import { useAccountRole } from '@/hooks/useAccountRole'
 import { useChatInbox } from '@/hooks/useChatInbox'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 
@@ -19,12 +20,11 @@ type Props = {
 
 export default function ChatShell({ activeConversationId }: Props) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, loading: sessionLoading } = useSupabaseSession()
+  const { accountRole } = useAccountRole(user?.id ?? null)
   const { advisorLink } = useAdvisorLink(user?.id ?? null)
   const { inbox, loading: inboxLoading } = useChatInbox(user?.id ?? null)
-  const advisorIntent = searchParams.get('as') === 'advisor'
-  const isAdvisor = Boolean(advisorLink) || advisorIntent
+  const isAdvisor = accountRole === 'advisor'
 
   const [resolvedPeer, setResolvedPeer] = useState<ChatUser | null>(null)
 
@@ -126,7 +126,7 @@ export default function ChatShell({ activeConversationId }: Props) {
           <ChatEmptyState
             variant={isAdvisor ? 'advisor' : 'traveller'}
             advisorRouteId={advisorLink?.advisorRouteId ?? null}
-            needsAdvisorLink={advisorIntent && !advisorLink}
+            needsAdvisorLink={isAdvisor && !advisorLink}
           />
         )}
       </div>
