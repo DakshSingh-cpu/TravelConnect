@@ -1,6 +1,8 @@
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { advisorBriefSchema } from '@/lib/advisorBrief'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
+import type { Attribution } from '@/lib/attribution'
+import { readAttribution } from '@/lib/attribution'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 import { parseIntakeBody } from '@/lib/matchAdvisors'
 
@@ -10,6 +12,7 @@ export type MatchSessionSnapshot = {
   advisors: EnrichedMatchedAdvisor[]
   intake: MatchIntakePayload
   advisorBrief?: AdvisorBrief | null
+  attribution?: Attribution | null
 }
 
 export function persistMatchSession(
@@ -19,7 +22,13 @@ export function persistMatchSession(
 ): void {
   if (typeof window === 'undefined') return
   try {
-    const snapshot: MatchSessionSnapshot = { advisors, intake, advisorBrief: advisorBrief ?? null }
+    const attribution = readAttribution()
+    const snapshot: MatchSessionSnapshot = {
+      advisors,
+      intake,
+      advisorBrief: advisorBrief ?? null,
+      attribution: attribution ?? null,
+    }
     sessionStorage.setItem(MATCH_RESULTS_STORAGE_KEY, JSON.stringify(snapshot))
   } catch {
     /* ignore quota / private mode */
