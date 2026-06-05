@@ -15,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen" style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning className="min-h-screen" style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
         <ThemeProvider>
           {children}
           <ThemeToggle />

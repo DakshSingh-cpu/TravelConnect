@@ -1,11 +1,25 @@
 import Database from 'better-sqlite3'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
+import { resolveCityCoords } from '@/lib/cityGeocodes'
+import {
+  haversineKm,
+  computeProximityScore,
+  computeLanguageScore,
+} from '@/lib/geoLanguage'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export interface MatchReason {
-  code: 'destination' | 'budget' | 'quality'
+  code: 'destination' | 'budget' | 'quality' | 'proximity' | 'language'
   label: string
+}
+
+export interface LocalMatchContext {
+  userLat: number
+  userLng: number
+  userCountryCode: string
+  userLanguage: string
+  excludeAgencyIds?: number[]
 }
 
 export interface ScoredAgency {
@@ -298,6 +312,120 @@ function buildReasons(scored: ScoredAgency, intake: MatchIntakeInput, targetBook
     reasons.push({ code: 'quality', label: `${Math.round(fulfillment)}% trip fulfillment on platform` })
   } else if (scored.profile.repeatClientRate > 0) {
     reasons.push({ code: 'quality', label: `${Math.round(scored.profile.repeatClientRate)}% repeat client rate` })
+  }
+
+  return reasons
+}
+
+// ── Local / Proximity Matching Pipeline ─────────────────────────────────────
+
+function retrieveAllAgencies(db: Database.Database, excludeIds: Set<number>): AgentProfile[] {
+  const rows = db.prepare('SELECT id, data FROM agencies').all() as { id: number; data: string }[]
+  const profiles: AgentProfile[] = []
+  for (const row of rows) {
+    if (excludeIds.has(row.id)) continue
+    profiles.push(JSON.parse(row.data) as AgentProfile)
+  }
+  return profiles
+}
+
+interface LocalScoredCandidate {
+  profile: AgentProfile
+  proximityKm: number
+  proximityScore: number
+  languageScore: number
+  budgetFit: number
+  styleFit: number
+  quality: number
+  totalScore: number
+}
+
+export function matchAgenciesLocal(
+  dbPath: string,
+  intake: MatchIntakeInput,
+  local: LocalMatchContext,
+  options?: { limit?: number },
+): ScoredAgency[] {
+  const db = getMatchDb(dbPath)
+  const excludeSet = new Set(local.excludeAgencyIds ?? [])
+  const allProfiles = retrieveAllAgencies(db, excludeSet)
+
+  if (allProfiles.length === 0) return []
+
+  const candidates: LocalScoredCandidate[] = []
+  for (const profile of allProfiles) {
+    const cityCoords = resolveCityCoords(profile.city)
+    let proximityKm = Infinity
+    let proxScore = 0
+
+    if (cityCoords) {
+      proximityKm = haversineKm(local.userLat, local.userLng, cityCoords[0], cityCoords[1])
+      proxScore = computeProximityScore(proximityKm)
+    }
+
+    const langScore = computeLanguageScore(local.userLanguage, profile.country)
+
+    const cheapScore = 0.6 * langScore + 0.4 * proxScore
+    if (cheapScore < 0.15) continue
+
+    const budgetFit = computeBudgetFit(intake.budgetLakh, profile.avgBookingValue)
+    const styleFit = computeStyleFit(intake.travelStyle, profile)
+    const quality = computeQuality(profile)
+
+    const totalScore =
+      0.30 * proxScore +
+      0.25 * langScore +
+      0.20 * budgetFit +
+      0.10 * styleFit +
+      0.15 * quality
+
+    candidates.push({
+      profile,
+      proximityKm,
+      proximityScore: proxScore,
+      languageScore: langScore,
+      budgetFit,
+      styleFit,
+      quality,
+      totalScore,
+    })
+  }
+
+  candidates.sort((a, b) => b.totalScore - a.totalScore)
+
+  const limit = options?.limit ?? 10
+  const top = candidates.slice(0, limit)
+
+  return top.map((c) => ({
+    profile: c.profile,
+    totalScore: c.totalScore,
+    tier: 'C' as const,
+    matchReasons: buildLocalReasons(c, local),
+  }))
+}
+
+function buildLocalReasons(c: LocalScoredCandidate, local: LocalMatchContext): MatchReason[] {
+  const reasons: MatchReason[] = []
+
+  if (c.proximityKm < Infinity) {
+    const distLabel = c.proximityKm < 100
+      ? `${Math.round(c.proximityKm)} km from you`
+      : `~${Math.round(c.proximityKm / 10) * 10} km from you`
+    reasons.push({ code: 'proximity', label: `Based in ${c.profile.city} · ${distLabel}` })
+  }
+
+  if (c.languageScore >= 0.6) {
+    reasons.push({ code: 'language', label: `Operates in a ${local.userLanguage}-friendly market` })
+  }
+
+  const avg = c.profile.avgBookingValue
+  if (avg > 0) {
+    reasons.push({ code: 'budget', label: `Typical booking ~$${Math.round(avg).toLocaleString()} fits your trip budget` })
+  }
+
+  const fulfillment = c.profile.tripFulfillmentRate
+  if (fulfillment > 0) {
+    reasons.push({ code: 'quality', label: `${Math.round(fulfillment)}% trip fulfillment on platform` })
   }
 
   return reasons

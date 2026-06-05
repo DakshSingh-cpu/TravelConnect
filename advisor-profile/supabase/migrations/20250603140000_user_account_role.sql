@@ -32,7 +32,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_role text;
+  existing_account_role text;
 begin
   if auth.uid() is null then
     raise exception 'Not authenticated';
@@ -44,15 +44,15 @@ begin
 
   perform public.ensure_public_user(auth.uid());
 
-  select u.account_role into current_role
+  select u.account_role into existing_account_role
   from public.users u
   where u.id = auth.uid();
 
-  if current_role is not null and current_role <> p_role then
-    raise exception 'Account role is already set to % and cannot be changed', current_role;
+  if existing_account_role is not null and existing_account_role <> p_role then
+    raise exception 'Account role is already set to % and cannot be changed', existing_account_role;
   end if;
 
-  if current_role is null then
+  if existing_account_role is null then
     update public.users
     set account_role = p_role
     where id = auth.uid();

@@ -134,6 +134,50 @@ export function buildMockMatchedAdvisors(
   ]
 }
 
+export type LocalMatchRequest = MatchIntakePayload & {
+  userLat: number
+  userLng: number
+  userCountryCode: string
+  userCountryName: string
+  userLanguage: string
+  excludeAgencyIds: number[]
+}
+
+export function parseLocalMatchBody(body: unknown): LocalMatchRequest | null {
+  const intake = parseIntakeBody(body)
+  if (!intake) return null
+
+  const o = body as Record<string, unknown>
+
+  const userLat = Number(o.userLat)
+  const userLng = Number(o.userLng)
+  if (!Number.isFinite(userLat) || userLat < -90 || userLat > 90) return null
+  if (!Number.isFinite(userLng) || userLng < -180 || userLng > 180) return null
+
+  const userCountryCode = typeof o.userCountryCode === 'string' ? o.userCountryCode.trim() : ''
+  const userCountryName = typeof o.userCountryName === 'string' ? o.userCountryName.trim() : ''
+  const userLanguage = typeof o.userLanguage === 'string' ? o.userLanguage.trim() : ''
+  if (!userCountryCode || userCountryCode.length > 3) return null
+  if (!userLanguage || userLanguage.length > 10) return null
+
+  let excludeAgencyIds: number[] = []
+  if (Array.isArray(o.excludeAgencyIds)) {
+    excludeAgencyIds = (o.excludeAgencyIds as unknown[])
+      .map(Number)
+      .filter((n) => Number.isFinite(n) && n > 0)
+  }
+
+  return {
+    ...intake,
+    userLat,
+    userLng,
+    userCountryCode,
+    userCountryName,
+    userLanguage,
+    excludeAgencyIds,
+  }
+}
+
 export function defaultIntakePayload(): MatchIntakePayload {
   return {
     destination: 'Western Europe',
