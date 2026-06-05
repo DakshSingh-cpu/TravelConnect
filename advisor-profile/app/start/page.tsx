@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import StepDestination from '@/components/matching/StepDestination'
 import StepBudget from '@/components/matching/StepBudget'
@@ -55,7 +55,7 @@ async function saveMatchSession(
   }
 }
 
-function StartFunnelInner() {
+export default function StartFunnelPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -253,17 +253,5 @@ function StartFunnelInner() {
         )}
       </main>
     </div>
-  )
-}
-
-export default function StartFunnelPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-cream">
-        <span className="text-sm font-semibold tracking-wide text-teal-brand animate-pulse">Loading TravelConnect...</span>
-      </div>
-    }>
-      <StartFunnelInner />
-    </Suspense>
   )
 }
