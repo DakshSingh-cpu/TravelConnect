@@ -103,7 +103,9 @@ export default function AuthModal({
     setBusy(true)
     setMessage(null)
     const supabase = createClient()
-    const redirectTo = `${window.location.origin}${window.location.pathname}${window.location.search}`
+    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+      window.location.pathname + window.location.search
+    )}`
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

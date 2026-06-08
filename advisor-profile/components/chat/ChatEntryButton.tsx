@@ -42,6 +42,9 @@ export default function ChatEntryButton({
       if (!result.ok) {
         if (result.reason === 'not_authenticated') {
           resumeAfterAuth.current = true
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('pending_chat_advisor_id', advisorRouteId)
+          }
           setAuthOpen(true)
           return
         }
@@ -72,6 +75,16 @@ export default function ChatEntryButton({
     void startChat()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only resume when session appears
   }, [session, loading])
+
+  useEffect(() => {
+    if (loading || !session || typeof window === 'undefined') return
+    const pending = sessionStorage.getItem('pending_chat_advisor_id')
+    if (pending === advisorRouteId) {
+      sessionStorage.removeItem('pending_chat_advisor_id')
+      void startChat()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, loading, advisorRouteId])
 
   return (
     <>

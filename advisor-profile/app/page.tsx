@@ -103,7 +103,10 @@ export default function MatchingIntakePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
-    if (params.get('view') !== MATCH_RESULTS_VIEW) return
+    const isResultsView = params.get('view') === MATCH_RESULTS_VIEW
+    const hasPendingChat = !!sessionStorage.getItem('pending_chat_advisor_id')
+
+    if (!isResultsView && !hasPendingChat) return
 
     const session = readMatchSession()
     if (!session) return

@@ -70,7 +70,7 @@ export default function UserProfileButton() {
     await supabase.auth.signOut()
     setOpen(false)
     setSigningOut(false)
-    window.location.reload()
+    window.location.href = '/'
   }
 
   return (

@@ -12,7 +12,7 @@ import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import { captureAttribution, readAttribution } from '@/lib/attribution'
 import { persistAccountRoleIntent } from '@/lib/accountRole'
-import { persistMatchSession } from '@/lib/matchSession'
+import { persistMatchSession, readMatchSession } from '@/lib/matchSession'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 
 // ── Step name ↔ URL param mapping ─────────────────────────────────────────────
@@ -92,6 +92,15 @@ function StartFunnelInner() {
   // Restore partial intake from sessionStorage on page refresh inside WebView
   useEffect(() => {
     try {
+      // If we are landing back on the results step (e.g. after OAuth redirect), restore match results
+      if (currentStep === 5) {
+        const session = readMatchSession()
+        if (session) {
+          setMatchedAdvisors(session.advisors)
+          if (session.advisorBrief) setAdvisorBrief(session.advisorBrief)
+        }
+      }
+
       const raw = sessionStorage.getItem(INTAKE_SESSION_KEY)
       if (!raw) return
       const saved = JSON.parse(raw) as Record<string, unknown>
@@ -101,6 +110,7 @@ function StartFunnelInner() {
     } catch {
       /* ignore */
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /** Navigate to the next step, updating the URL so browser back button works */
