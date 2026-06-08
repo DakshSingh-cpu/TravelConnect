@@ -63,9 +63,11 @@ function StartFunnelInner() {
   const stepParam = searchParams.get('step')
   const currentStep = stepIndexFromParam(stepParam)
 
-  const [destination, setDestination] = useState<string | null>(null)
-  const [budgetLakh, setBudgetLakh] = useState(15)
-  const [travelStyle, setTravelStyle] = useState<string | null>(null)
+  const [destination, setDestination] = useState<string | null>(searchParams.get('destination') ?? null)
+  const [budgetLakh, setBudgetLakh] = useState(
+    searchParams.has('budgetLakh') ? Number(searchParams.get('budgetLakh')) : 15
+  )
+  const [travelStyle, setTravelStyle] = useState<string | null>(searchParams.get('travelStyle') ?? null)
 
   const [advisorBrief, setAdvisorBrief] = useState<AdvisorBrief | null>(null)
   const [matchedAdvisors, setMatchedAdvisors] = useState<EnrichedMatchedAdvisor[] | null>(null)
