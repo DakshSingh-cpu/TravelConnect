@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Attribution } from '@/lib/attribution'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 import type { EnrichedMatchedAdvisor } from '@/lib/matchAdvisors'
+import { notifyMatchedAdvisors } from '@/lib/push/notifyMatchedAdvisors'
 
 // Use service-role key so anonymous clients can insert without a Supabase session
 const supabaseAdmin = createClient(
@@ -59,7 +60,11 @@ export async function POST(request: Request) {
     landed_at: attribution?.landed_at ? new Date(attribution.landed_at) : null,
   }
 
-  const { error } = await supabaseAdmin.from('match_sessions').insert(row)
+  const { data: inserted, error } = await supabaseAdmin
+    .from('match_sessions')
+    .insert(row)
+    .select('id')
+    .single()
 
   if (error) {
     console.error('[match-sessions] Insert error:', error.message)
@@ -67,5 +72,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: error.message }, { status: 200 })
   }
 
-  return NextResponse.json({ ok: true })
+  const matchSessionId = inserted.id
+
+  // Notify matched advisors on mobile (non-blocking)
+  void notifyMatchedAdvisors({
+    matchSessionId,
+    advisorAgencyIds: advisorIds,
+    destination: row.destination,
+  })
+
+  return NextResponse.json({ ok: true, matchSessionId })
 }

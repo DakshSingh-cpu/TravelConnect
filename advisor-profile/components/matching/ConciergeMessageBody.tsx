@@ -12,7 +12,7 @@ export default function ConciergeMessageBody({ text }: { text: string }) {
   const segments = parseSegments(text)
 
   return (
-    <div className="space-y-3 text-sm leading-relaxed">
+    <div className="space-y-2.5 text-[0.9375rem] leading-relaxed">
       {segments.map((segment, i) => {
         if (segment.kind === 'h3') {
           return (

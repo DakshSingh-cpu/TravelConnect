@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { readMatchSession, persistMatchSession, MATCH_RESULTS_VIEW } from '@/lib/matchSession'
 import StepDestination from '@/components/matching/StepDestination'
+import TravellerReturnModal from '@/components/matching/TravellerReturnModal'
 import StepPreferences from '@/components/matching/StepPreferences'
 import StepAIConcierge from '@/components/matching/StepAIConcierge'
 import StepMatching from '@/components/matching/StepMatching'
@@ -28,6 +29,7 @@ export default function MatchingIntakePage() {
   // -1 = welcome/role-selection screen, 0+ = traveller flow steps
   const [currentStep, setCurrentStep] = useState(-1)
   const [advisorAuthOpen, setAdvisorAuthOpen] = useState(false)
+  const [travellerReturnOpen, setTravellerReturnOpen] = useState(false)
 
   const [destination, setDestination] = useState<string | null>(null)
   const [budgetLakh, setBudgetLakh] = useState(15)
@@ -62,11 +64,17 @@ export default function MatchingIntakePage() {
   )
 
   async function handleTravellerStart() {
+    // Show the return/fresh-start modal before entering the flow
+    setTravellerReturnOpen(true)
+  }
+
+  async function proceedAsTraveller() {
+    setTravellerReturnOpen(false)
     if (user) {
       const role = await fetchMyAccountRole()
       if (role === 'advisor') {
         alert(
-          'This account is registered as a Travel Advisor. Sign in via “I am a Travel Advisor” to open your client inbox.',
+          'This account is registered as a Travel Advisor. Sign in via "I am a Travel Advisor" to open your client inbox.',
         )
         return
       }
@@ -126,39 +134,12 @@ export default function MatchingIntakePage() {
 
   return (
     <div
-      className="flex min-h-dvh flex-col"
+      className="flex flex-1 flex-col"
       style={{
         background:
           'radial-gradient(ellipse 90% 45% at 50% -8%, var(--grad-1) 0%, transparent 55%), var(--cream)',
       }}
     >
-      <header
-        className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center border-b border-transparent backdrop-blur-md backdrop-saturate-[130%]"
-        role="banner"
-        style={{
-          backgroundColor: 'var(--header-bg)',
-          borderBottomColor: 'var(--border)',
-        }}
-      >
-        <div className="mx-auto flex w-full max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-8">
-          <span className="text-sm font-semibold tracking-wide text-teal-brand">TravelConnect</span>
-          <nav className="flex items-center gap-4" aria-label="Site">
-            <Link
-              href="/advisors"
-              className="text-[0.6875rem] uppercase tracking-[0.08em] transition-colors hover:text-[var(--teal)]"
-              style={{ color: 'var(--muted)' }}
-            >
-              Advisors
-            </Link>
-            <span
-              className="text-[0.6875rem] uppercase tracking-[0.08em]"
-              style={{ color: 'var(--muted)' }}
-            >
-              Verified match
-            </span>
-          </nav>
-        </div>
-      </header>
 
       {/* Advisor Auth Modal */}
       <AuthModal
@@ -171,6 +152,18 @@ export default function MatchingIntakePage() {
         accountRole="advisor"
         title="Advisor sign in"
         subtitle="Sign in to access your advisor inbox and manage client conversations."
+      />
+
+      {/* Traveller Return Modal — shown between role selection and destination step */}
+      <TravellerReturnModal
+        open={travellerReturnOpen}
+        onClose={() => setTravellerReturnOpen(false)}
+        onGoToChat={() => {
+          setTravellerReturnOpen(false)
+          router.push('/chat')
+        }}
+        onFreshStart={() => void proceedAsTraveller()}
+        onFreshSignedIn={() => void proceedAsTraveller()}
       />
 
       <main
@@ -232,7 +225,7 @@ export default function MatchingIntakePage() {
         )}
 
         {currentStep === 2 && intakePayload && (
-          <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-6 sm:py-5 lg:px-10">
+          <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
             <StepAIConcierge
               intake={intakePayload}
               onBack={() => setCurrentStep(1)}

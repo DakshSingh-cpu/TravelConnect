@@ -37,15 +37,81 @@ export type Database = {
           id: string
           created_at: string
           updated_at: string
+          match_session_id: string | null
         }
         Insert: {
           id?: string
           created_at?: string
           updated_at?: string
+          match_session_id?: string | null
         }
         Update: {
           updated_at?: string
+          match_session_id?: string | null
         }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          expo_push_token: string
+          platform: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          expo_push_token: string
+          platform?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          expo_push_token?: string
+          platform?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      match_sessions: {
+        Row: {
+          id: string
+          created_at: string
+          destination: string | null
+          budget_lakh: number | null
+          travel_style: string | null
+          vibe: string | null
+          pace: string | null
+          timing: string | null
+          duration: string | null
+          advisor_ids: number[] | null
+          utm_source: string | null
+          utm_medium: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          fbclid: string | null
+          landed_at: string | null
+        }
+        Insert: {
+          id?: string
+          destination?: string | null
+          budget_lakh?: number | null
+          travel_style?: string | null
+          vibe?: string | null
+          pace?: string | null
+          timing?: string | null
+          duration?: string | null
+          advisor_ids?: number[] | null
+          utm_source?: string | null
+          utm_medium?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          fbclid?: string | null
+          landed_at?: string | null
+        }
+        Update: Record<string, never>
         Relationships: []
       }
       conversation_participants: {
@@ -134,6 +200,14 @@ export type Database = {
         Args: Record<string, never>
         Returns: undefined
       }
+      get_conversation_for_match_session: {
+        Args: { p_match_session_id: string }
+        Returns: string
+      }
+      get_my_agency_id: {
+        Args: Record<string, never>
+        Returns: number
+      }
       get_or_create_direct_conversation: {
         Args: { peer_user_id: string }
         Returns: string
@@ -141,6 +215,10 @@ export type Database = {
       is_conversation_participant: {
         Args: { p_conversation_id: string }
         Returns: boolean
+      }
+      link_conversation_to_match_session: {
+        Args: { p_conversation_id: string; p_match_session_id: string }
+        Returns: undefined
       }
       set_my_account_role: {
         Args: { p_role: 'traveller' | 'advisor' }

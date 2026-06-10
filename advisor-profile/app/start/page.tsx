@@ -12,7 +12,11 @@ import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import { captureAttribution, readAttribution } from '@/lib/attribution'
 import { persistAccountRoleIntent } from '@/lib/accountRole'
-import { persistMatchSession, readMatchSession } from '@/lib/matchSession'
+import {
+  persistMatchSession,
+  persistMatchSessionId,
+  readMatchSession,
+} from '@/lib/matchSession'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 
 // ── Step name ↔ URL param mapping ─────────────────────────────────────────────
@@ -45,11 +49,17 @@ async function saveMatchSession(
 ) {
   try {
     const attribution = readAttribution()
-    await fetch('/api/match-sessions', {
+    const res = await fetch('/api/match-sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ advisors, intake, attribution }),
     })
+    if (!res.ok) return
+
+    const data = (await res.json()) as { ok?: boolean; matchSessionId?: string }
+    if (data.ok && data.matchSessionId) {
+      persistMatchSessionId(data.matchSessionId)
+    }
   } catch {
     // Non-critical — don't surface errors to the user
   }
@@ -149,25 +159,12 @@ function StartFunnelInner() {
 
   return (
     <div
-      className="flex min-h-dvh flex-col"
+      className="flex flex-1 flex-col"
       style={{
         background:
           'radial-gradient(ellipse 90% 45% at 50% -8%, var(--grad-1) 0%, transparent 55%), var(--cream)',
       }}
     >
-      {/* Slim header — logo only, no nav links to reduce exit friction */}
-      <header
-        className="sticky top-0 z-50 flex h-[3.25rem] shrink-0 items-center border-b border-transparent backdrop-blur-md backdrop-saturate-[130%]"
-        role="banner"
-        style={{
-          backgroundColor: 'var(--header-bg)',
-          borderBottomColor: 'var(--border)',
-        }}
-      >
-        <div className="mx-auto flex w-full max-w-[90rem] items-center px-4 sm:px-8">
-          <span className="text-sm font-semibold tracking-wide text-teal-brand">TravelConnect</span>
-        </div>
-      </header>
 
       <main
         id="main"
@@ -229,7 +226,7 @@ function StartFunnelInner() {
 
         {/* Step 3: AI Concierge Chat */}
         {currentStep === 3 && intakePayload && (
-          <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-6 sm:py-5 lg:px-10">
+          <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
             <StepAIConcierge
               intake={intakePayload}
               onBack={() => goTo('style')}

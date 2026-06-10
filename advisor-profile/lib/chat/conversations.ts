@@ -46,7 +46,10 @@ export async function getOrCreateDirectConversation(peerUserId: string): Promise
  * Opens chat with an advisor: resolves their auth user, then finds/creates the conversation.
  * Returns `{ conversationId }` or `{ needsAuth: true }` when there is no session.
  */
-export async function openChatWithAdvisor(advisorRouteId: string): Promise<
+export async function openChatWithAdvisor(
+  advisorRouteId: string,
+  matchSessionId?: string | null,
+): Promise<
   | { ok: true; conversationId: string; briefSaveFailed?: boolean }
   | { ok: false; reason: 'not_authenticated' }
   | { ok: false; reason: 'advisor_not_linked'; advisorRouteId: string }
@@ -68,6 +71,16 @@ export async function openChatWithAdvisor(advisorRouteId: string): Promise<
   }
 
   const conversationId = await getOrCreateDirectConversation(peerUserId)
+
+  if (matchSessionId) {
+    const { error: linkError } = await supabase.rpc('link_conversation_to_match_session', {
+      p_conversation_id: conversationId,
+      p_match_session_id: matchSessionId,
+    })
+    if (linkError) {
+      console.error('[chat] link_conversation_to_match_session', linkError)
+    }
+  }
 
   let briefSaveFailed = false
   const brief = readAdvisorBrief()

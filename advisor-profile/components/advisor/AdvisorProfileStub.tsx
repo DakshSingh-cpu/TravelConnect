@@ -18,24 +18,6 @@ export default function AdvisorProfileStub({ advisorId, displayName }: Props) {
           'radial-gradient(100% 80% at 80% 0%, var(--grad-1) 0%, transparent 45%), radial-gradient(90% 60% at 10% 20%, var(--grad-2) 0%, transparent 40%), var(--cream)',
       }}
     >
-      <header
-        className="sticky top-0 z-50 flex h-13 items-center border-b backdrop-blur-xl"
-        style={{
-          background: 'var(--header-bg)',
-          borderColor: 'var(--border)',
-          boxShadow: 'var(--header-shadow)',
-        }}
-      >
-        <div className="mx-auto flex w-full max-w-7xl items-baseline justify-between gap-4 px-6">
-          <span className="text-sm font-semibold tracking-tight" style={{ color: 'var(--teal)' }}>
-            TravelConnect
-          </span>
-          <span className="text-xs uppercase tracking-widest" style={{ color: 'var(--muted)' }}>
-            Advisor Profile
-          </span>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-2xl px-4 py-16 md:px-8">
         <Link
           href="/"

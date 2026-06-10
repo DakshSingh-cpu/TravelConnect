@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { matchResultsHref } from '@/lib/matchSession'
 
 type Props = {
   variant: 'advisor' | 'traveller'
@@ -64,11 +65,11 @@ export default function ChatEmptyState({ variant, advisorRouteId, needsAdvisorLi
         </div>
       ) : (
         <Link
-          href="/"
+          href={matchResultsHref()}
           className="mt-6 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-95"
           style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
         >
-          Find an advisor
+          View your matches
         </Link>
       )}
     </div>

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import AuthModal from '@/components/auth/AuthModal'
 import { openChatWithAdvisor } from '@/lib/chat/conversations'
+import { readMatchSessionId } from '@/lib/matchSession'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 
 type Props = {
@@ -37,7 +38,7 @@ export default function ChatEntryButton({
     setBusy(true)
 
     try {
-      const result = await openChatWithAdvisor(advisorRouteId)
+      const result = await openChatWithAdvisor(advisorRouteId, readMatchSessionId())
 
       if (!result.ok) {
         if (result.reason === 'not_authenticated') {

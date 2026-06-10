@@ -26,8 +26,6 @@ type Props = {
   agentProfile: AgentProfile | null
   customBio?: string | null
   customVideoUrl?: string | null
-  /** When true, owner sees "Back to inbox" instead of match results */
-  advisorContext?: boolean
 }
 
 export default function DetailedAdvisorProfile({
@@ -35,7 +33,6 @@ export default function DetailedAdvisorProfile({
   agentProfile,
   customBio,
   customVideoUrl,
-  advisorContext = false,
 }: Props) {
   const { user } = useSupabaseSession()
   const { advisorLink } = useAdvisorLink(user?.id ?? null)
@@ -114,30 +111,14 @@ export default function DetailedAdvisorProfile({
         `,
       }}
     >
-      <header
-        className="sticky top-0 z-50 flex h-13 items-center border-b backdrop-blur-xl transition-colors duration-300"
-        style={{
-          background: 'var(--header-bg)',
-          borderColor: 'var(--border)',
-          boxShadow: 'var(--header-shadow)',
-        }}
-      >
-        <div className="mx-auto flex w-full max-w-7xl items-baseline justify-between gap-4 px-6">
-          <span className="text-sm font-semibold tracking-tight" style={{ color: '#0F6E56' }}>
-            TravelConnect
-          </span>
-          <span className="text-xs uppercase tracking-widest text-stone-400">Verified Advisor Profile</span>
-        </div>
-      </header>
-
       <main className="mx-auto w-full max-w-6xl px-4 py-8 pb-24 md:px-8" id="profile-main">
         <div className="mb-6 flex items-center justify-between">
           <Link
-            href={isOwner && advisorContext ? '/chat' : matchResultsHref()}
+            href={isOwner ? '/chat' : matchResultsHref()}
             className="inline-flex items-center gap-2 text-sm transition-colors duration-200 hover:opacity-80"
             style={{ color: 'var(--muted)' }}
           >
-            {isOwner && advisorContext ? '← Back to inbox' : '← Back to your matches'}
+            {isOwner ? '← Back to client inbox' : '← Back to your matches'}
           </Link>
 
           {/* Edit Profile button — only visible to the advisor who owns this profile */}
@@ -260,7 +241,7 @@ export default function DetailedAdvisorProfile({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -50 }}
                 transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-                className="min-w-0 self-start md:sticky md:top-24"
+                className="min-w-0 self-start md:sticky md:top-20"
               >
                 <SidebarProfile persona={persona} agentProfile={agentProfile} />
               </motion.div>

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { LayoutGroup, motion } from 'framer-motion'
 import MessageBubble from '@/components/chat/MessageBubble'
-import BriefPill from '@/components/chat/BriefPill'
-import ClientBriefBanner from '@/components/chat/ClientBriefBanner'
+import ClientBriefOverlay from '@/components/chat/ClientBriefOverlay'
 import { useChatMessages } from '@/hooks/useChatMessages'
 import { useConversationBrief } from '@/hooks/useConversationBrief'
 import { useTravellerBriefSync } from '@/hooks/useTravellerBriefSync'
@@ -53,7 +53,11 @@ export default function ChatMain({
   const { syncNotice } = useTravellerBriefSync(conversationId, !viewerIsAdvisor)
   const [draft, setDraft] = useState('')
   const [peerIsAdvisor, setPeerIsAdvisor] = useState<boolean | null>(null)
+  const [briefOpen, setBriefOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const displayName = peerDisplayName(peer, peerIsAdvisor)
+  const canOpenBrief = viewerIsAdvisor
 
   useEffect(() => {
     if (!peer?.id) {
@@ -93,7 +97,8 @@ export default function ChatMain({
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" style={{ background: 'var(--cream)' }}>
+    <LayoutGroup id={`chat-brief-${conversationId}`}>
+    <section className="relative flex min-h-0 flex-1 flex-col" style={{ background: 'var(--cream)' }}>
       <header
         className="flex h-14 shrink-0 items-center gap-3 border-b px-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
@@ -109,19 +114,72 @@ export default function ChatMain({
             ←
           </button>
         )}
-        <PeerAvatar name={peerDisplayName(peer, peerIsAdvisor)} url={peer?.avatar_url ?? null} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-            {peerDisplayName(peer, peerIsAdvisor)}
-          </p>
-          <p className="text-xs" style={{ color: 'var(--muted)' }}>
-            {peerSubtitle(peerIsAdvisor, viewerIsAdvisor)}
-          </p>
-        </div>
-        <Link href={viewerIsAdvisor ? '/' : matchResultsHref()} className="hidden text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
+        {canOpenBrief ? (
+          <motion.button
+            type="button"
+            onClick={() => setBriefOpen(true)}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 text-left transition-colors hover:bg-black/[0.03] active:bg-black/[0.05]"
+            aria-label={`View client brief for ${displayName}`}
+            aria-expanded={briefOpen}
+            whileTap={{ scale: 0.99 }}
+          >
+            <PeerAvatar
+              name={displayName}
+              url={peer?.avatar_url ?? null}
+              layoutId="client-brief-avatar"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                {displayName}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {peerSubtitle(peerIsAdvisor, viewerIsAdvisor)}
+                {brief && !briefLoading && (
+                  <span style={{ color: 'var(--teal)' }}> · tap for brief</span>
+                )}
+              </p>
+            </div>
+            {brief && !briefLoading && (
+              <span
+                className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold sm:inline"
+                style={{
+                  borderColor: 'rgba(15,110,86,0.25)',
+                  background: 'var(--teal-light, #e8f5f0)',
+                  color: 'var(--teal)',
+                }}
+              >
+                Brief
+              </span>
+            )}
+          </motion.button>
+        ) : (
+          <>
+            <PeerAvatar name={displayName} url={peer?.avatar_url ?? null} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                {displayName}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                {peerSubtitle(peerIsAdvisor, viewerIsAdvisor)}
+              </p>
+            </div>
+          </>
+        )}
+        <Link href={viewerIsAdvisor ? '/' : matchResultsHref()} className="hidden shrink-0 text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
           {viewerIsAdvisor ? 'Home' : 'Matches'}
         </Link>
       </header>
+
+      {canOpenBrief && (
+        <ClientBriefOverlay
+          open={briefOpen}
+          onClose={() => setBriefOpen(false)}
+          brief={brief}
+          loading={briefLoading}
+          travelerName={displayName}
+          travelerAvatarUrl={peer?.avatar_url ?? null}
+        />
+      )}
 
       <div
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
@@ -155,14 +213,6 @@ export default function ChatMain({
             >
               {syncNotice}
             </p>
-          )}
-
-          {viewerIsAdvisor && (
-            <div className="sticky top-0 z-10 pb-1 pt-0">
-              {briefLoading && <ClientBriefBanner variant="loading" />}
-              {!briefLoading && brief && <BriefPill brief={brief} />}
-              {!briefLoading && !brief && <ClientBriefBanner variant="empty" />}
-            </div>
           )}
 
           {messages.map((msg) => (
@@ -211,23 +261,37 @@ export default function ChatMain({
         </form>
       </footer>
     </section>
+    </LayoutGroup>
   )
 }
 
-function PeerAvatar({ name, url }: { name: string; url: string | null }) {
+function PeerAvatar({
+  name,
+  url,
+  layoutId,
+}: {
+  name: string
+  url: string | null
+  layoutId?: string
+}) {
   const initial = name.charAt(0).toUpperCase()
   if (url) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={url} alt="" className="h-10 w-10 rounded-full object-cover" />
+      <motion.img
+        layoutId={layoutId}
+        src={url}
+        alt=""
+        className="h-10 w-10 rounded-full object-cover"
+      />
     )
   }
   return (
-    <div
+    <motion.div
+      layoutId={layoutId}
       className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white"
       style={{ background: 'var(--teal)' }}
     >
       {initial}
-    </div>
+    </motion.div>
   )
 }

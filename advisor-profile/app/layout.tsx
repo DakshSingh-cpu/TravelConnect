@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/lib/ThemeContext'
 import ThemeToggle from '@/components/ThemeToggle'
+import GlobalHeader from '@/components/GlobalHeader'
 
 export const metadata: Metadata = {
   title: 'Find Your Travel Advisor | TravelConnect',
@@ -16,9 +17,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning className="min-h-screen" style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
+      <body suppressHydrationWarning className="h-dvh flex flex-col overflow-hidden" style={{ background: 'var(--cream)', color: 'var(--ink)' }}>
         <ThemeProvider>
-          {children}
+          <GlobalHeader />
+          <div className="flex-1 flex flex-col relative min-h-0 overflow-y-auto">
+            {children}
+          </div>
           <ThemeToggle />
         </ThemeProvider>
       </body>

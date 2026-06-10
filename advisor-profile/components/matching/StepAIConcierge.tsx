@@ -32,7 +32,7 @@ type Phase = 'chat' | 'transferring'
 function StepDots() {
   return (
     <motion.div
-      className="mb-5 flex justify-center gap-2"
+      className="mb-4 flex justify-center gap-2"
       aria-hidden="true"
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0 }}
@@ -52,6 +52,57 @@ function StepDots() {
   )
 }
 
+function ConciergeAvatar({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  const dim = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-9 w-9 text-sm'
+  return (
+    <div
+      className={`${dim} flex shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm`}
+      style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
+      aria-hidden
+    >
+      TC
+    </div>
+  )
+}
+
+function SendIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M3.4 20.6 21 12 3.4 3.4l2.8 7.2L17 12l-10.8 1.4-2.8 7.2Z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex items-end gap-2.5">
+      <ConciergeAvatar size="sm" />
+      <div
+        className="flex gap-1.5 rounded-2xl rounded-bl-md border px-4 py-3 shadow-sm"
+        style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--teal)]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--teal)] opacity-60 [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--teal)] opacity-30 [animation-delay:300ms]" />
+      </div>
+    </div>
+  )
+}
+
+function TripPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium"
+      style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--muted)' }}
+    >
+      {children}
+    </span>
+  )
+}
+
 export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
   const [phase, setPhase] = useState<Phase>('chat')
   const [input, setInput] = useState('')
@@ -59,6 +110,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
   const [handoffReason, setHandoffReason] = useState<string | null>(null)
   const handoffStarted = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const transport = useMemo(
     () =>
@@ -80,6 +132,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
 
   const isBusy = status === 'submitted' || status === 'streaming'
   const isTransferring = phase === 'transferring'
+  const isEmpty = messages.length === 0
 
   const executeHandoff = useCallback(
     async (msgs: UIMessage[]) => {
@@ -124,18 +177,26 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
   useEffect(() => {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages, phase])
+  }, [messages, phase, isBusy])
 
   const handleSend = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isBusy || isTransferring) return
     sendMessage({ text: trimmed })
     setInput('')
+    inputRef.current?.focus()
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     handleSend(input)
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend(input)
+    }
   }
 
   if (isTransferring) {
@@ -157,7 +218,9 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
             Transferring to your expert…
           </h2>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
-            Packaging your preferences and conversation into a brief for your matched advisor.
+            {handoffReason
+              ? handoffReason
+              : 'Packaging your preferences and conversation into a brief for your matched advisor.'}
           </p>
         </motion.div>
       </div>
@@ -166,24 +229,24 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
 
   return (
     <motion.div
-      className="flex min-h-0 w-full flex-1 flex-col"
+      className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(220px,17rem)_1fr] lg:items-stretch lg:gap-5 xl:grid-cols-[minmax(260px,20rem)_1fr] xl:gap-6"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
     >
-      <StepDots />
-
-      <div className="mb-5 flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 flex-1">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="mb-2 text-sm text-stone-400 transition-colors hover:text-[#0F6E56]"
-            >
-              ← Back
-            </button>
-          )}
+      <aside className="flex shrink-0 flex-col gap-3 lg:pt-1">
+        <StepDots />
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="self-start text-sm transition-colors"
+            style={{ color: 'var(--muted)' }}
+          >
+            ← Back
+          </button>
+        )}
+        <div>
           <p
             className="mb-1 text-[0.6875rem] font-bold uppercase tracking-[0.1em]"
             style={{ color: 'var(--section-label)' }}
@@ -192,202 +255,224 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
           </p>
           <h2
             id="concierge-title"
-            className="font-display text-[clamp(1.35rem,1.2rem+1vw,2rem)] italic tracking-[-0.02em]"
+            className="font-display text-[clamp(1.35rem,1.2rem+1vw,1.85rem)] italic tracking-[-0.02em]"
             style={{ color: 'var(--ink)' }}
           >
             Let&apos;s shape your {intake.destination} trip
           </h2>
-          <p className="mt-1.5 text-sm" style={{ color: 'var(--muted)' }}>
-            ₹{intake.budgetLakh}L · {intake.travelStyle} · {intake.vibe} · {intake.pace}
-          </p>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <TripPill>₹{intake.budgetLakh}L</TripPill>
+            <TripPill>{intake.travelStyle}</TripPill>
+            <TripPill>{intake.vibe}</TripPill>
+            <TripPill>{intake.pace}</TripPill>
+          </div>
         </div>
-      </div>
+      </aside>
 
       <motion.div
-        className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-2xl border shadow-[0_4px_24px_rgba(28,25,23,0.08)] backdrop-blur-md"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border shadow-[0_4px_24px_rgba(28,25,23,0.08)]"
         style={{
           background: 'var(--card-bg)',
           borderColor: 'var(--border)',
-          minHeight: 'min(640px, calc(100dvh - 11rem))',
+          minHeight: 'min(560px, calc(100dvh - 10rem))',
         }}
         layout
       >
-        <motion.div
-          ref={scrollRef}
-          className="flex-1 space-y-5 overflow-y-auto px-4 py-5 sm:px-8 sm:py-6 lg:px-10"
-          role="log"
-          aria-live="polite"
-          aria-label="Concierge conversation"
+        {/* In-card header */}
+        <div
+          className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3 sm:px-5"
+          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
         >
-          {messages.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-xl border px-5 py-4 text-sm leading-relaxed"
-              style={{
-                borderColor: 'var(--border)',
-                background: 'var(--surface-2)',
-                color: 'var(--body)',
-              }}
-            >
-              Hi — I&apos;m your TravelConnect concierge for <strong>{intake.destination}</strong>. Tell me what
-              you&apos;re imagining, or tap a suggestion below.
-            </motion.div>
-          )}
-
-          <AnimatePresence initial={false}>
-            {messages.map((message) => {
-              const text = getTextFromUIMessage(message)
-              const isUser = message.role === 'user'
-              if (!text && message.role === 'user') return null
-
-              if (isUser) {
-                return (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-end"
-                  >
-                    <div
-                      className="max-w-[min(100%,28rem)] rounded-2xl rounded-br-md px-5 py-3 text-sm leading-relaxed text-white shadow-sm"
-                      style={{
-                        background: 'linear-gradient(135deg, var(--teal), #0a5a46)',
-                      }}
-                    >
-                      {text}
-                    </div>
-                  </motion.div>
-                )
-              }
-
-              return (
-                <motion.article
-                  key={message.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="w-full rounded-xl border-l-[3px] px-5 py-4 sm:px-6"
-                  style={{
-                    borderColor: 'var(--border)',
-                    borderLeftColor: 'var(--teal)',
-                    background: 'var(--surface)',
-                  }}
-                >
-                  <p
-                    className="mb-2 text-[0.625rem] font-bold uppercase tracking-[0.1em]"
-                    style={{ color: 'var(--teal)' }}
-                  >
-                    Concierge
-                  </p>
-                  {text ? (
-                    <ConciergeMessageBody text={text} />
-                  ) : (
-                    <span className="text-sm" style={{ color: 'var(--muted)' }}>
-                      …
-                    </span>
-                  )}
-                  {messageHasAcceptedHandoff(message) && (
-                    <p className="mt-3 text-xs font-medium" style={{ color: 'var(--teal)' }}>
-                      Connecting you with a human advisor…
-                    </p>
-                  )}
-                </motion.article>
-              )
-            })}
-          </AnimatePresence>
-
-          {isBusy && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full">
-              <div
-                className="flex gap-1.5 rounded-xl border px-5 py-4"
-                style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
-              >
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--teal)]" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--teal)] opacity-60 [animation-delay:150ms]" />
-                <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--teal)] opacity-30 [animation-delay:300ms]" />
-              </div>
-            </motion.div>
-          )}
-        </motion.div>
-
-        {messages.length === 0 && (
-          <div
-            className="flex flex-wrap gap-2 border-t px-4 py-3 sm:px-8 lg:px-10"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            {SUGGESTED_PROMPTS.map((prompt) => (
-              <motion.button
-                key={prompt}
-                type="button"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                disabled={isBusy}
-                onClick={() => handleSend(prompt)}
-                className="rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:border-[rgba(15,110,86,0.35)]"
-                style={{ borderColor: 'var(--border)', color: 'var(--body)' }}
-              >
-                {prompt}
-              </motion.button>
-            ))}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <ConciergeAvatar size="sm" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold" style={{ color: 'var(--ink)' }}>
+                TravelConnect Concierge
+              </p>
+              <p className="flex items-center gap-1.5 text-[11px]" style={{ color: 'var(--muted)' }}>
+                <span
+                  className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+                  aria-hidden
+                />
+                Online · knows your {intake.destination} brief
+              </p>
+            </div>
           </div>
-        )}
-
-        {(error || transferError) && (
-          <p className="px-4 pb-2 text-center text-xs text-red-600 sm:px-8">
-            {transferError ?? error?.message}
-          </p>
-        )}
-
-        <form
-          onSubmit={handleSubmit}
-          className="flex shrink-0 flex-col gap-3 border-t px-4 py-4 sm:px-8 sm:py-5 lg:px-10"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          <div className="flex w-full gap-3">
-            <label htmlFor="concierge-input" className="sr-only">
-              Message the concierge
-            </label>
-            <input
-              id="concierge-input"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={isBusy}
-              placeholder="Ask about routes, vibe, budget fit…"
-              className="min-w-0 flex-1 rounded-xl border px-4 py-3.5 text-sm outline-none transition-shadow focus:ring-2 focus:ring-[rgba(15,110,86,0.25)]"
-              style={{
-                borderColor: 'var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--ink)',
-              }}
-            />
-            <motion.button
-              type="submit"
-              disabled={isBusy || !input.trim()}
-              whileTap={{ scale: 0.97 }}
-              className="shrink-0 rounded-xl px-6 py-3.5 text-sm font-semibold text-white disabled:opacity-40"
-              style={{ background: 'var(--teal)' }}
-            >
-              Send
-            </motion.button>
-          </div>
-
-          <motion.button
+          <button
             type="button"
             disabled={isBusy}
-            whileHover={{ scale: 1.005 }}
-            whileTap={{ scale: 0.99 }}
             onClick={() => void executeHandoff(messages)}
-            className="w-full rounded-xl border-2 py-3.5 text-sm font-semibold shadow-sm transition-colors"
+            className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors hover:opacity-90 disabled:opacity-40"
             style={{
               borderColor: 'var(--teal)',
               color: 'var(--teal)',
               background: 'var(--teal-light)',
             }}
           >
-            Connect to Advisor →
-          </motion.button>
-          <p className="text-center text-[11px]" style={{ color: 'var(--muted)' }}>
-            Explicit handoff — we&apos;ll summarize this chat for your matched expert.
+            Connect to Advisor
+          </button>
+        </div>
+
+        {/* Message area */}
+        <div
+          ref={scrollRef}
+          className={`min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 ${isEmpty ? 'flex flex-col justify-center' : ''}`}
+          role="log"
+          aria-live="polite"
+          aria-label="Concierge conversation"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 15% 8%, rgba(15,110,86,0.05) 0%, transparent 42%), radial-gradient(circle at 88% 92%, rgba(186,117,23,0.04) 0%, transparent 38%)',
+          }}
+        >
+          <div className="flex w-full flex-col gap-4">
+            {isEmpty && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full flex-col gap-6 md:gap-8 xl:flex-row xl:items-center xl:justify-between"
+              >
+                <div className="flex items-start gap-3 sm:gap-4 xl:max-w-sm xl:shrink-0">
+                  <ConciergeAvatar />
+                  <div className="min-w-0 pt-0.5">
+                    <p className="text-base font-medium sm:text-lg" style={{ color: 'var(--ink)' }}>
+                      Hi — I&apos;m your concierge for {intake.destination}
+                    </p>
+                    <p className="mt-1.5 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+                      Tell me what you&apos;re imagining, or pick a suggestion to get started.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid w-full gap-2 sm:grid-cols-2 xl:min-w-0 xl:flex-1 xl:grid-cols-3">
+                  {SUGGESTED_PROMPTS.map((prompt) => (
+                    <motion.button
+                      key={prompt}
+                      type="button"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={isBusy}
+                      onClick={() => handleSend(prompt)}
+                      className="rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors hover:border-[rgba(15,110,86,0.35)]"
+                      style={{
+                        borderColor: 'var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--body)',
+                      }}
+                    >
+                      {prompt}
+                    </motion.button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            <AnimatePresence initial={false}>
+              {messages.map((message) => {
+                const text = getTextFromUIMessage(message)
+                const isUser = message.role === 'user'
+                if (!text && message.role === 'user') return null
+
+                if (isUser) {
+                  return (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex justify-end"
+                    >
+                      <div
+                        className="max-w-[min(90%,34rem)] rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed text-white shadow-sm"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--teal), #0a5a46)',
+                        }}
+                      >
+                        <p className="whitespace-pre-wrap break-words">{text}</p>
+                      </div>
+                    </motion.div>
+                  )
+                }
+
+                return (
+                  <motion.div
+                    key={message.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-end gap-2.5"
+                  >
+                    <ConciergeAvatar size="sm" />
+                    <article
+                      className="max-w-[min(90%,42rem)] rounded-2xl rounded-bl-md border px-4 py-3 shadow-sm"
+                      style={{
+                        borderColor: 'var(--border)',
+                        background: 'var(--surface)',
+                      }}
+                    >
+                      {text ? (
+                        <ConciergeMessageBody text={text} />
+                      ) : (
+                        <span className="text-sm" style={{ color: 'var(--muted)' }}>
+                          …
+                        </span>
+                      )}
+                      {messageHasAcceptedHandoff(message) && (
+                        <p className="mt-2.5 text-xs font-medium" style={{ color: 'var(--teal)' }}>
+                          Connecting you with a human advisor…
+                        </p>
+                      )}
+                    </article>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+
+            {isBusy && <TypingIndicator />}
+          </div>
+        </div>
+
+        {(error || transferError) && (
+          <p className="shrink-0 px-4 pb-1 text-center text-xs text-red-600 sm:px-5" role="alert">
+            {transferError ?? error?.message}
+          </p>
+        )}
+
+        {/* Input footer */}
+        <form
+          onSubmit={handleSubmit}
+          className="shrink-0 border-t px-4 py-3 sm:px-6 lg:px-8"
+          style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+        >
+          <div
+            className="flex items-end gap-2 rounded-2xl border p-2 shadow-sm"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface-2)' }}
+          >
+            <label htmlFor="concierge-input" className="sr-only">
+              Message the concierge
+            </label>
+            <textarea
+              ref={inputRef}
+              id="concierge-input"
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              disabled={isBusy}
+              placeholder="Ask about routes, vibe, budget fit…"
+              className="max-h-32 min-h-[2.5rem] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-relaxed outline-none"
+              style={{ color: 'var(--ink)' }}
+            />
+            <motion.button
+              type="submit"
+              disabled={isBusy || !input.trim()}
+              whileTap={{ scale: 0.94 }}
+              aria-label="Send message"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white disabled:opacity-40"
+              style={{ background: 'var(--teal)' }}
+            >
+              <SendIcon />
+            </motion.button>
+          </div>
+          <p className="mt-2 text-center text-[10px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+            Shift+Enter for a new line · we&apos;ll summarize this chat for your matched expert on handoff
           </p>
         </form>
       </motion.div>

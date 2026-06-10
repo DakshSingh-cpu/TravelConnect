@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import type { InboxConversation } from '@/lib/chat/types'
-import UserProfileButton from '@/components/auth/UserProfileButton'
 
 type Props = {
   inbox: InboxConversation[]
@@ -48,9 +47,6 @@ export default function ChatSidebar({ inbox, activeConversationId, loading, isAd
         <h1 className="font-display text-lg" style={{ color: 'var(--teal)' }}>
           {isAdvisor ? 'Client inbox' : 'Messages'}
         </h1>
-        <div className="hidden md:block">
-          <UserProfileButton />
-        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">

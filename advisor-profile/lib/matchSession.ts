@@ -7,12 +7,14 @@ import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvi
 import { parseIntakeBody } from '@/lib/matchAdvisors'
 
 export const MATCH_RESULTS_STORAGE_KEY = 'tbo_match_results'
+export const MATCH_SESSION_ID_STORAGE_KEY = 'tbo_match_session_id'
 
 export type MatchSessionSnapshot = {
   advisors: EnrichedMatchedAdvisor[]
   intake: MatchIntakePayload
   advisorBrief?: AdvisorBrief | null
   attribution?: Attribution | null
+  matchSessionId?: string | null
 }
 
 export function persistMatchSession(
@@ -32,6 +34,25 @@ export function persistMatchSession(
     sessionStorage.setItem(MATCH_RESULTS_STORAGE_KEY, JSON.stringify(snapshot))
   } catch {
     /* ignore quota / private mode */
+  }
+}
+
+export function persistMatchSessionId(matchSessionId: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(MATCH_SESSION_ID_STORAGE_KEY, matchSessionId)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readMatchSessionId(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const id = sessionStorage.getItem(MATCH_SESSION_ID_STORAGE_KEY)
+    return id && id.length > 0 ? id : null
+  } catch {
+    return null
   }
 }
 
@@ -55,10 +76,16 @@ export function readMatchSession(): MatchSessionSnapshot | null {
       if (briefParsed.success) advisorBrief = briefParsed.data
     }
 
+    const matchSessionId =
+      typeof o.matchSessionId === 'string' && o.matchSessionId.length > 0
+        ? o.matchSessionId
+        : readMatchSessionId()
+
     return {
       advisors: o.advisors as EnrichedMatchedAdvisor[],
       intake,
       advisorBrief,
+      matchSessionId,
     }
   } catch {
     return null

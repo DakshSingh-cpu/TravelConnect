@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthModal from '@/components/auth/AuthModal'
-import UserProfileButton from '@/components/auth/UserProfileButton'
 import ChatEmptyState from '@/components/chat/ChatEmptyState'
 import ChatMain from '@/components/chat/ChatMain'
 import ChatSidebar from '@/components/chat/ChatSidebar'
@@ -64,7 +63,7 @@ export default function ChatShell({ activeConversationId }: Props) {
 
   if (sessionLoading) {
     return (
-      <div className="flex h-[100dvh] items-center justify-center" style={{ background: 'var(--cream)' }}>
+      <div className="flex flex-1 items-center justify-center" style={{ background: 'var(--cream)' }}>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
           Loading…
         </p>
@@ -74,7 +73,7 @@ export default function ChatShell({ activeConversationId }: Props) {
 
   if (!user) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 px-6" style={{ background: 'var(--cream)' }}>
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6" style={{ background: 'var(--cream)' }}>
         <p className="text-center text-sm" style={{ color: 'var(--muted)' }}>
           Sign in to view your messages.
         </p>
@@ -90,17 +89,7 @@ export default function ChatShell({ activeConversationId }: Props) {
   }
 
   return (
-    <div className="flex h-[100dvh] flex-col" style={{ background: 'var(--cream)' }}>
-      <div
-        className="flex h-12 shrink-0 items-center justify-between border-b px-4 md:hidden"
-        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        <span className="text-sm font-semibold" style={{ color: '#0F6E56' }}>
-          TravelConnect
-        </span>
-        <UserProfileButton />
-      </div>
-
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--cream)' }}>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`h-full ${showMainOnMobile ? 'hidden md:flex' : 'flex'} md:flex`}>
           <ChatSidebar

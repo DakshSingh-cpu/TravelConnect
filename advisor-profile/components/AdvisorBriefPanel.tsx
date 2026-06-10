@@ -6,16 +6,18 @@ import type { AdvisorBrief } from '@/lib/advisorBrief'
 type Props = {
   brief: AdvisorBrief
   compact?: boolean
+  /** Remove max-height cap — used in full-screen client brief overlay. */
+  unbounded?: boolean
 }
 
-export default function AdvisorBriefPanel({ brief, compact = false }: Props) {
+export default function AdvisorBriefPanel({ brief, compact = false, unbounded = false }: Props) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`rounded-2xl border text-left shadow-sm backdrop-blur-md overflow-y-auto max-h-[65vh] ${
-        compact ? 'p-4' : 'p-5'
-      }`}
+      className={`rounded-2xl border text-left shadow-sm backdrop-blur-md overflow-y-auto ${
+        unbounded ? '' : 'max-h-[65vh]'
+      } ${compact ? 'p-4' : 'p-5'}`}
       style={{
         background: 'var(--card-bg)',
         borderColor: 'var(--border)',

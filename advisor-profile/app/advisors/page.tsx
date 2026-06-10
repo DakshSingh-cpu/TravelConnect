@@ -12,28 +12,12 @@ export const metadata: Metadata = {
 export default function AdvisorsDirectoryPage() {
   return (
     <div
-      className="min-h-dvh"
+      className="flex-1"
       style={{
         background:
           'radial-gradient(ellipse 90% 45% at 50% -8%, var(--grad-1) 0%, transparent 55%), var(--cream)',
       }}
     >
-      <header
-        className="sticky top-0 z-50 border-b backdrop-blur-md"
-        style={{
-          backgroundColor: 'var(--header-bg)',
-          borderBottomColor: 'var(--border)',
-        }}
-      >
-        <div className="mx-auto flex h-[3.25rem] w-full max-w-[90rem] items-center justify-between gap-4 px-4 sm:px-8">
-          <Link href="/" className="text-sm font-semibold tracking-wide text-teal-brand">
-            TravelConnect
-          </Link>
-          <span className="text-[0.6875rem] uppercase tracking-[0.08em]" style={{ color: 'var(--muted)' }}>
-            Advisor directory
-          </span>
-        </div>
-      </header>
 
       <main className="mx-auto w-full max-w-[90rem] px-4 py-10 sm:px-8 sm:py-14">
         <p
