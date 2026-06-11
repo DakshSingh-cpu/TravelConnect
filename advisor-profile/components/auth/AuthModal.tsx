@@ -22,6 +22,8 @@ type Props = {
   subtitle?: string
   /** Set immutable account role on successful sign-in (sign-up or sign-in). */
   accountRole?: AccountRole
+  /** Optional URL to redirect to after Google OAuth. Defaults to current path. */
+  nextUrl?: string
 }
 
 export default function AuthModal({
@@ -32,6 +34,7 @@ export default function AuthModal({
   title = 'Sign in to continue',
   subtitle = 'Create an account or sign in to message your advisor.',
   accountRole,
+  nextUrl,
 }: Props) {
   const [mode, setMode] = useState<Mode>('sign_in')
   const [email, setEmail] = useState('')
@@ -103,8 +106,9 @@ export default function AuthModal({
     setBusy(true)
     setMessage(null)
     const supabase = createClient()
+    const fallbackNext = window.location.pathname + window.location.search
     const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(
-      window.location.pathname + window.location.search
+      nextUrl ?? fallbackNext
     )}`
 
     const { error } = await supabase.auth.signInWithOAuth({

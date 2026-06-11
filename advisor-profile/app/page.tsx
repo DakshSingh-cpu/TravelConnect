@@ -30,6 +30,7 @@ export default function MatchingIntakePage() {
   const [currentStep, setCurrentStep] = useState(-1)
   const [advisorAuthOpen, setAdvisorAuthOpen] = useState(false)
   const [travellerReturnOpen, setTravellerReturnOpen] = useState(false)
+  const [travellerReturnStep, setTravellerReturnStep] = useState<'selection' | 'post_login'>('selection')
 
   const [destination, setDestination] = useState<string | null>(null)
   const [budgetLakh, setBudgetLakh] = useState(15)
@@ -65,6 +66,7 @@ export default function MatchingIntakePage() {
 
   async function handleTravellerStart() {
     // Show the return/fresh-start modal before entering the flow
+    setTravellerReturnStep('selection')
     setTravellerReturnOpen(true)
   }
 
@@ -111,6 +113,16 @@ export default function MatchingIntakePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
+
+    // Handle OAuth callback resume for traveller flow
+    if (params.get('resume_traveller') === 'true') {
+      setTravellerReturnStep('post_login')
+      setTravellerReturnOpen(true)
+      const newUrl = new URL(window.location.href)
+      newUrl.searchParams.delete('resume_traveller')
+      window.history.replaceState({}, '', newUrl.toString())
+    }
+
     const isResultsView = params.get('view') === MATCH_RESULTS_VIEW
     const hasPendingChat = !!sessionStorage.getItem('pending_chat_advisor_id')
 
@@ -157,7 +169,11 @@ export default function MatchingIntakePage() {
       {/* Traveller Return Modal — shown between role selection and destination step */}
       <TravellerReturnModal
         open={travellerReturnOpen}
-        onClose={() => setTravellerReturnOpen(false)}
+        initialStep={travellerReturnStep}
+        onClose={() => {
+          setTravellerReturnOpen(false)
+          setTravellerReturnStep('selection')
+        }}
         onGoToChat={() => {
           setTravellerReturnOpen(false)
           router.push('/chat')

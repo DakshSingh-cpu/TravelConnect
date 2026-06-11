@@ -16,6 +16,8 @@ type Props = {
   onFreshStart: () => void
   /** Called when user has signed in fresh and should proceed */
   onFreshSignedIn: () => void
+  /** If provided, overrides the default start step when the modal opens */
+  initialStep?: 'selection' | 'post_login'
 }
 
 export default function TravellerReturnModal({
@@ -24,6 +26,7 @@ export default function TravellerReturnModal({
   onGoToChat,
   onFreshStart,
   onFreshSignedIn,
+  initialStep = 'selection',
 }: Props) {
   const [mounted, setMounted] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -43,9 +46,9 @@ export default function TravellerReturnModal({
 
   useEffect(() => {
     if (open) {
-      setStep('selection')
+      setStep(initialStep)
     }
-  }, [open])
+  }, [open, initialStep])
 
   if (!mounted) return null
 
@@ -457,6 +460,7 @@ export default function TravellerReturnModal({
           setStep('post_login')
         }}
         accountRole="traveller"
+        nextUrl="/?resume_traveller=true"
         title="Welcome, traveller"
         subtitle="Sign in or create an account to save your matches and message advisors."
       />
