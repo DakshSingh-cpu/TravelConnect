@@ -39,10 +39,11 @@ export default function TravellerReturnModal({
 
   useEffect(() => {
     setMounted(true)
-    // Check if there's a previous match session to resume
+    // Only surface a previous journey if the user is actually signed in.
+    // sessionStorage persists across sign-out so we must gate on auth state.
     const session = readMatchSession()
-    setHasPreviousSession(!!session)
-  }, [])
+    setHasPreviousSession(!!session && !!user)
+  }, [user])
 
   useEffect(() => {
     if (open) {
@@ -53,6 +54,7 @@ export default function TravellerReturnModal({
   if (!mounted) return null
 
   const previousDestination = (() => {
+    if (!user) return null
     try {
       const session = readMatchSession()
       return session?.intake?.destination ?? null

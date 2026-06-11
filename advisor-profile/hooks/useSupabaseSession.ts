@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { clearMatchSession } from '@/lib/matchSession'
 
 type SessionState = {
   session: Session | null
@@ -36,7 +37,10 @@ export function useSupabaseSession(): SessionState {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_OUT') {
+        clearMatchSession()
+      }
       setSession(nextSession)
       setLoading(false)
     })
