@@ -9,7 +9,6 @@ import { useChatMessages } from '@/hooks/useChatMessages'
 import { useConversationBrief } from '@/hooks/useConversationBrief'
 import { useTravellerBriefSync } from '@/hooks/useTravellerBriefSync'
 import { isLinkedTravelAdvisor } from '@/lib/chat/peerRole'
-import { matchResultsHref } from '@/lib/matchSession'
 import type { ChatUser } from '@/lib/chat/types'
 
 type Props = {
@@ -103,6 +102,7 @@ export default function ChatMain({
         className="flex h-14 shrink-0 items-center gap-3 border-b px-4"
         style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
       >
+        {/* Mobile back button (advisor thread list) */}
         {showBackOnMobile && onBack && (
           <button
             type="button"
@@ -113,6 +113,17 @@ export default function ChatMain({
           >
             ←
           </button>
+        )}
+
+        {/* Left-side nav link for travellers */}
+        {!viewerIsAdvisor && (
+          <Link
+            href="/"
+            className="shrink-0 text-xs font-medium hidden sm:inline"
+            style={{ color: 'var(--teal)' }}
+          >
+            ← Plan a new journey
+          </Link>
         )}
         {canOpenBrief ? (
           <motion.button
@@ -165,9 +176,11 @@ export default function ChatMain({
             </div>
           </>
         )}
-        <Link href={viewerIsAdvisor ? '/' : matchResultsHref()} className="hidden shrink-0 text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
-          {viewerIsAdvisor ? 'Home' : 'Matches'}
-        </Link>
+        {viewerIsAdvisor && (
+          <Link href="/" className="hidden shrink-0 text-xs font-medium sm:inline" style={{ color: 'var(--teal)' }}>
+            Home
+          </Link>
+        )}
       </header>
 
       {canOpenBrief && (
