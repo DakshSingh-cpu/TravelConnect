@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { clearMatchSession } from '@/lib/matchSession'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { useAdvisorLink } from '@/hooks/useAdvisorLink'
 import { useAccountRole } from '@/hooks/useAccountRole'
@@ -68,6 +69,8 @@ export default function UserProfileButton() {
     setSigningOut(true)
     const supabase = createClient()
     await supabase.auth.signOut()
+    // Clear all traveller journey data so the next visitor starts fresh
+    clearMatchSession()
     setOpen(false)
     setSigningOut(false)
     window.location.href = '/'

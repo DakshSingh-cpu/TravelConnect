@@ -99,6 +99,22 @@ export function readAgentProfileFromSession(advisorId: string): AgentProfile | n
   return session.advisors.find((a) => a.id === advisorId)?.agentProfile ?? null
 }
 
+/** Wipe all match-related session data. Call this on sign-out so the next
+ *  visitor does not see a previous traveller's journey. */
+export function clearMatchSession(): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.removeItem(MATCH_RESULTS_STORAGE_KEY)
+    sessionStorage.removeItem(MATCH_SESSION_ID_STORAGE_KEY)
+    // Also clear adjacent keys written during the flow
+    sessionStorage.removeItem('tbo_match_intake')
+    sessionStorage.removeItem('tbo_advisor_brief')
+    sessionStorage.removeItem('pending_chat_advisor_id')
+  } catch {
+    /* ignore */
+  }
+}
+
 export const MATCH_RESULTS_VIEW = 'results'
 
 /** Home URL that restores the top-3 advisor cards step. */
