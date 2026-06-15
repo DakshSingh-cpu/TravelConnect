@@ -1,7 +1,20 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import type { AdvisorBrief } from '@/lib/advisorBrief'
+import type { AdvisorBrief, ReadinessTier } from '@/lib/advisorBrief'
+
+function tierBadgeClass(tier: ReadinessTier): string {
+  if (tier === 'hot') return 'bg-emerald-100 text-emerald-800'
+  if (tier === 'warm') return 'bg-amber-100 text-amber-900'
+  return 'bg-stone-100 text-stone-600'
+}
+
+function tierLabel(tier: ReadinessTier): string {
+  if (tier === 'hot') return 'Hot lead'
+  if (tier === 'warm') return 'Warm lead'
+  if (tier === 'nurture') return 'Nurture'
+  return 'Low intent'
+}
 
 type Props = {
   brief: AdvisorBrief
@@ -23,12 +36,33 @@ export default function AdvisorBriefPanel({ brief, compact = false, unbounded = 
         borderColor: 'var(--border)',
       }}
     >
-      <p
-        className="mb-2 text-[0.6875rem] font-bold uppercase tracking-[0.1em]"
-        style={{ color: 'var(--section-label)' }}
-      >
-        Advisor brief
-      </p>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <p
+          className="text-[0.6875rem] font-bold uppercase tracking-[0.1em]"
+          style={{ color: 'var(--section-label)' }}
+        >
+          Advisor brief
+        </p>
+        {brief.readiness_tier && brief.readiness_tier !== 'blocked' && (
+          <>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tierBadgeClass(brief.readiness_tier)}`}
+            >
+              {tierLabel(brief.readiness_tier)}
+            </span>
+            <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
+              Readiness {brief.readiness_score}/100
+            </span>
+          </>
+        )}
+      </div>
+      {brief.low_intent_signals && brief.low_intent_signals.length > 0 && (
+        <ul className="mb-3 list-inside list-disc text-xs" style={{ color: 'var(--muted)' }}>
+          {brief.low_intent_signals.map((signal) => (
+            <li key={signal}>{signal}</li>
+          ))}
+        </ul>
+      )}
       <p className={`leading-relaxed ${compact ? 'text-sm' : 'text-[0.9375rem]'}`} style={{ color: 'var(--ink)' }}>
         {brief.tldr}
       </p>

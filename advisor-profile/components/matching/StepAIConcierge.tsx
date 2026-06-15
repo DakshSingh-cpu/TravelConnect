@@ -15,6 +15,36 @@ import {
 } from '@/lib/chatMessages'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 
+export const CHAT_MESSAGES_KEY = 'tbo_concierge_messages'
+
+function readPersistedMessages(): UIMessage[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = sessionStorage.getItem(CHAT_MESSAGES_KEY)
+    if (!raw) return []
+    return JSON.parse(raw) as UIMessage[]
+  } catch {
+    return []
+  }
+}
+
+function persistMessages(messages: UIMessage[]) {
+  try {
+    if (messages.length === 0) return
+    sessionStorage.setItem(CHAT_MESSAGES_KEY, JSON.stringify(messages))
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearPersistedMessages() {
+  try {
+    sessionStorage.removeItem(CHAT_MESSAGES_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 const SUGGESTED_PROMPTS = [
   'Sketch a 10-day route that fits our pace',
   'What should we prioritize with this budget?',
@@ -25,6 +55,7 @@ type Props = {
   intake: MatchIntakePayload
   onHandoff: (brief: AdvisorBrief) => void
   onBack?: () => void
+  onTransferStarted?: () => void
 }
 
 type Phase = 'chat' | 'transferring'
@@ -103,32 +134,69 @@ function TripPill({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
+const MIN_USER_TURNS_FOR_HANDOFF = 3
+
+export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferStarted }: Props) {
   const [phase, setPhase] = useState<Phase>('chat')
   const [input, setInput] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
   const [handoffReason, setHandoffReason] = useState<string | null>(null)
+  const [intakeBlocked, setIntakeBlocked] = useState(false)
+  const [rateLimitError, setRateLimitError] = useState<string | null>(null)
+  const [handoffBlockedMsg, setHandoffBlockedMsg] = useState<string | null>(null)
   const handoffStarted = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const initialMessages = useRef<UIMessage[]>(readPersistedMessages())
+  const wasRestored = initialMessages.current.length > 0
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/chat',
         body: { intake },
+        fetch: async (input, init) => {
+          setRateLimitError(null)
+          const res = await fetch(input, init)
+          if (res.headers.get('X-Intake-Blocked') === 'true') {
+            setIntakeBlocked(true)
+          }
+          return res
+        },
       }),
     [intake],
   )
 
-  const { messages, sendMessage, status, stop, error } = useChat({
+  const { messages, setMessages, sendMessage, status, stop, error } = useChat({
     transport,
     onFinish: ({ messages: finishedMessages }) => {
       if (hasCompletedHandoffTool(finishedMessages)) {
         void executeHandoff(finishedMessages)
       }
     },
+    onError: async (chatError) => {
+      const message = chatError.message ?? ''
+      if (message.includes('429') || message.toLowerCase().includes('too many')) {
+        setRateLimitError('You are sending messages too quickly. Please wait a moment and try again.')
+      }
+    },
   })
+
+  // AI SDK v6's useChat doesn't reliably apply initialMessages to its internal
+  // state (the transport-based architecture can reset it). Hydrate persisted
+  // messages explicitly via setMessages on mount.
+  useEffect(() => {
+    if (initialMessages.current.length > 0) {
+      setMessages(initialMessages.current)
+    }
+    // Run once on mount only
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Persist messages to sessionStorage on every update so they survive navigation
+  useEffect(() => {
+    persistMessages(messages)
+  }, [messages])
 
   const isBusy = status === 'submitted' || status === 'streaming'
   const isTransferring = phase === 'transferring'
@@ -145,6 +213,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
       setHandoffReason(toolOutput?.reason ?? null)
 
       setPhase('transferring')
+      onTransferStarted?.()
 
       try {
         const res = await fetch('/api/synthesize-brief', {
@@ -152,19 +221,29 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: msgs, intake }),
         })
+        if (res.status === 422 || res.status === 429) {
+          const body = (await res.json().catch(() => ({}))) as { message?: string }
+          throw new Error(body.message ?? 'Trip details need updating before we can continue.')
+        }
         if (!res.ok) throw new Error('Brief synthesis failed')
         const data = (await res.json()) as { brief: AdvisorBrief }
         persistAdvisorBrief(data.brief)
+        // NOTE: do NOT clear persisted messages here — the parent page clears them
+        // only after advisor matching fully succeeds (step 4). This allows the user
+        // to see their previous conversation if a guardrail rejects the handoff and
+        // sends them back to step 2.
         await new Promise((r) => setTimeout(r, 1400))
         onHandoff(data.brief)
-      } catch {
-        setTransferError('Could not prepare your brief. Please try again.')
+      } catch (err) {
+        setTransferError(
+          err instanceof Error ? err.message : 'Could not prepare your brief. Please try again.',
+        )
         handoffStarted.current = false
         setHandoffReason(null)
         setPhase('chat')
       }
     },
-    [intake, onHandoff, stop],
+    [intake, onHandoff, onTransferStarted, stop],
   )
 
   useEffect(() => {
@@ -182,6 +261,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
   const handleSend = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || isBusy || isTransferring) return
+    setHandoffBlockedMsg(null)
     sendMessage({ text: trimmed })
     setInput('')
     inputRef.current?.focus()
@@ -236,6 +316,18 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
     >
       <aside className="flex shrink-0 flex-col gap-3 lg:pt-1">
         <StepDots />
+        {wasRestored && (
+          <p
+            className="rounded-lg border px-3 py-2 text-xs leading-relaxed"
+            style={{
+              borderColor: 'var(--teal)',
+              background: 'var(--teal-light)',
+              color: 'var(--teal)',
+            }}
+          >
+            💬 Your previous conversation has been restored.
+          </p>
+        )}
         {onBack && (
           <button
             type="button"
@@ -301,7 +393,17 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
           <button
             type="button"
             disabled={isBusy}
-            onClick={() => void executeHandoff(messages)}
+            onClick={() => {
+              const userTurns = messages.filter((m) => m.role === 'user').length
+              if (userTurns < MIN_USER_TURNS_FOR_HANDOFF) {
+                setHandoffBlockedMsg(
+                  `Share a bit more about your trip first (at least ${MIN_USER_TURNS_FOR_HANDOFF} messages). Tell us about your dates, interests, or must-see places!`,
+                )
+                return
+              }
+              setHandoffBlockedMsg(null)
+              void executeHandoff(messages)
+            }}
             className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors hover:opacity-90 disabled:opacity-40"
             style={{
               borderColor: 'var(--teal)',
@@ -429,10 +531,27 @@ export default function StepAIConcierge({ intake, onHandoff, onBack }: Props) {
           </div>
         </div>
 
-        {(error || transferError) && (
+        {(error || transferError || rateLimitError || handoffBlockedMsg) && (
           <p className="shrink-0 px-4 pb-1 text-center text-xs text-red-600 sm:px-5" role="alert">
-            {transferError ?? error?.message}
+            {handoffBlockedMsg ?? transferError ?? rateLimitError ?? error?.message}
           </p>
+        )}
+
+        {intakeBlocked && onBack && (
+          <div className="shrink-0 px-4 pb-2 text-center sm:px-5">
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors hover:opacity-90"
+              style={{
+                borderColor: 'var(--teal)',
+                color: 'var(--teal)',
+                background: 'var(--teal-light)',
+              }}
+            >
+              Edit trip details
+            </button>
+          </div>
         )}
 
         {/* Input footer */}

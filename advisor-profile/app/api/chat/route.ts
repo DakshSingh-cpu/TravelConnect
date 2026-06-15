@@ -3,13 +3,12 @@ import { z } from 'zod'
 import { buildConciergeSystemPrompt } from '@/lib/conciergePrompt'
 import { getConciergeModel, getModelRotation, hasGeminiApiKey } from '@/lib/aiModel'
 import { createMockConciergeResponse } from '@/lib/mockConciergeStream'
-import {
-  defaultIntakePayload,
-  parseIntakeBody,
-  type MatchIntakePayload,
-} from '@/lib/matchAdvisors'
+import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 import { evaluateHandoffGate, EXPLICIT_OVERRIDE_REGEX } from '@/lib/handoffGates'
 import { getTextFromUIMessage } from '@/lib/chatMessages'
+import { parseAndValidateIntake } from '@/lib/intakeValidation'
+import { createIntakeBlockedConciergeResponse } from '@/lib/guardrails/intakeBlockedStream'
+import { checkRateLimit } from '@/lib/guardrails/rateLimit'
 
 export const maxDuration = 60
 
@@ -39,6 +38,9 @@ function isRateLimitError(err: unknown): boolean {
 }
 
 export async function POST(req: Request) {
+  const rateLimited = await checkRateLimit(req, 'chat', '/api/chat')
+  if (rateLimited) return rateLimited
+
   let body: ChatRequestBody
   try {
     body = await req.json()
@@ -50,8 +52,21 @@ export async function POST(req: Request) {
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : []
-  const intake: MatchIntakePayload =
-    parseIntakeBody(body.intake) ?? defaultIntakePayload()
+  const intakeValidation = parseAndValidateIntake(body.intake)
+  if (!intakeValidation.success) {
+    console.warn('[intake-gate]', {
+      route: '/api/chat',
+      blockedField: intakeValidation.result.blockedField,
+      code: 'INTAKE_BLOCKED',
+    })
+    return createIntakeBlockedConciergeResponse(
+      messages,
+      intakeValidation.result.message,
+      intakeValidation.result.blockedField,
+    )
+  }
+
+  const intake: MatchIntakePayload = intakeValidation.data
 
   if (!hasGeminiApiKey()) {
     return createMockConciergeResponse(messages, intake)

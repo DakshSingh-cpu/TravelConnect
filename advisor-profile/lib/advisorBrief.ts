@@ -1,5 +1,12 @@
 import { z } from 'zod'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
+import {
+  DEFAULT_READINESS_SCORE,
+  DEFAULT_READINESS_TIER,
+} from '@/lib/guardrails/constants'
+
+export const readinessTierSchema = z.enum(['hot', 'warm', 'nurture', 'blocked'])
+export type ReadinessTier = z.infer<typeof readinessTierSchema>
 
 export const advisorBriefSchema = z.object({
   tldr: z.string().describe('Two sentence summary for the human advisor'),
@@ -10,6 +17,23 @@ export const advisorBriefSchema = z.object({
   }),
   key_decisions: z.array(z.string()),
   advisor_action_items: z.array(z.string()),
+  readiness_score: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .default(DEFAULT_READINESS_SCORE)
+    .describe(
+      'Lead readiness score 0–100. 75+ = hot. 58–74 = warm. 42–57 = nurture. Below 42 = blocked.',
+    ),
+  readiness_tier: readinessTierSchema
+    .default(DEFAULT_READINESS_TIER)
+    .describe('Tier derived from readiness_score'),
+  low_intent_signals: z
+    .array(z.string())
+    .max(3)
+    .default([])
+    .describe('Signals that reduced the score'),
 })
 
 export type AdvisorBrief = z.infer<typeof advisorBriefSchema>
@@ -39,7 +63,15 @@ export function buildFallbackBrief(
       'Share 2–3 itinerary directions aligned with budget',
       'Offer a short intro call within 24 hours',
     ],
+    readiness_score: DEFAULT_READINESS_SCORE,
+    readiness_tier: DEFAULT_READINESS_TIER,
+    low_intent_signals: [],
   }
+}
+
+export function parseAdvisorBrief(raw: unknown): AdvisorBrief | null {
+  const parsed = advisorBriefSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
 }
 
 export function persistAdvisorBrief(brief: AdvisorBrief): void {
@@ -56,7 +88,7 @@ export function readAdvisorBrief(): AdvisorBrief | null {
   try {
     const raw = sessionStorage.getItem(ADVISOR_BRIEF_STORAGE_KEY)
     if (!raw) return null
-    return advisorBriefSchema.parse(JSON.parse(raw))
+    return parseAdvisorBrief(JSON.parse(raw))
   } catch {
     return null
   }

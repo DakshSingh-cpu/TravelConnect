@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
-import { advisorBriefSchema } from '@/lib/advisorBrief'
-import {
-  defaultIntakePayload,
-  parseIntakeBody,
-  type MatchIntakePayload,
-} from '@/lib/matchAdvisors'
+import { parseAdvisorBrief } from '@/lib/advisorBrief'
+import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 import { matchAgencies } from '@/lib/matchAgenciesStage1'
 import { rerankWithLlm } from '@/lib/rerankAdvisors'
 import {
   enrichScoredResults,
   type EnrichedMatchedAdvisorV2,
 } from '@/lib/enrichResults'
+import { requireValidIntake } from '@/lib/guardrails/intakeGate'
+import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import {
+  buildReadinessBlockedMatchResponse,
+  deriveReadinessTier,
+  normalizeAdvisorBrief,
+} from '@/lib/guardrails/readiness'
+import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 
 export type { EnrichedMatchedAdvisorV2 }
 
@@ -24,21 +28,47 @@ const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
  * Returns: { advisors: EnrichedMatchedAdvisorV2[], rerankSource: 'llm' | 'fallback' }
  */
 export async function POST(request: Request) {
-  let intake: MatchIntakePayload
-  let advisorBrief = null
+  const rateLimited = await checkRateLimit(request, 'match-advisors', '/api/match-advisors')
+  if (rateLimited) return rateLimited
 
+  let json: unknown
   try {
-    const json = await request.json()
-    const parsed = parseIntakeBody(json)
-    intake = parsed ?? defaultIntakePayload()
-    if (json && typeof json === 'object' && 'advisorBrief' in json) {
-      const briefParsed = advisorBriefSchema.safeParse(
-        (json as { advisorBrief: unknown }).advisorBrief,
-      )
-      if (briefParsed.success) advisorBrief = briefParsed.data
-    }
+    json = await request.json()
   } catch {
-    intake = defaultIntakePayload()
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const intakeResult = requireValidIntake(json, '/api/match-advisors')
+  if ('response' in intakeResult) {
+    return intakeResult.response
+  }
+  const intake: MatchIntakePayload = intakeResult.intake
+
+  let advisorBrief = null
+  if (json && typeof json === 'object' && 'advisorBrief' in json) {
+    const raw = parseAdvisorBrief((json as { advisorBrief: unknown }).advisorBrief)
+    if (raw) {
+      advisorBrief = normalizeAdvisorBrief(raw, intake)
+    }
+  }
+
+  const readinessScore = advisorBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
+  const readinessTier = deriveReadinessTier(readinessScore)
+
+  if (readinessTier === 'blocked' || readinessTier === 'nurture') {
+    console.info('[readiness-gate]', {
+      route: '/api/match-advisors',
+      tier: readinessTier,
+      score: readinessScore,
+    })
+    return NextResponse.json(
+      buildReadinessBlockedMatchResponse(
+        readinessScore,
+        readinessTier,
+        advisorBrief?.low_intent_signals ?? [],
+      ),
+      { status: 200 },
+    )
   }
 
   try {
@@ -67,6 +97,10 @@ export async function POST(request: Request) {
       intakeUsed: intake,
       briefUsed: Boolean(advisorBrief),
       rerankSource,
+      readinessTier,
+      readinessScore,
+      isNurtureLead: false,
+      lowIntentSignals: advisorBrief?.low_intent_signals ?? [],
     })
   } catch (err) {
     console.error('[match-advisors] Stage 1 match error:', err)

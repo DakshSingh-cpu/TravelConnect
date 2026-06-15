@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import path from 'path'
-import { advisorBriefSchema } from '@/lib/advisorBrief'
+import { parseAdvisorBrief } from '@/lib/advisorBrief'
 import {
   parseLocalMatchBody,
   type LocalMatchRequest,
@@ -8,6 +8,12 @@ import {
 import { matchAgenciesLocal } from '@/lib/matchAgenciesStage1'
 import { rerankWithLlm } from '@/lib/rerankAdvisors'
 import { enrichScoredResults, type EnrichedMatchedAdvisorV2 } from '@/lib/enrichResults'
+import {
+  buildReadinessBlockedMatchResponse,
+  deriveReadinessTier,
+  normalizeAdvisorBrief,
+} from '@/lib/guardrails/readiness'
+import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
 
@@ -36,16 +42,34 @@ export async function POST(request: Request) {
     localReq = parsed
 
     if (json && typeof json === 'object' && 'advisorBrief' in json) {
-      const briefParsed = advisorBriefSchema.safeParse(
-        (json as { advisorBrief: unknown }).advisorBrief,
-      )
-      if (briefParsed.success) advisorBrief = briefParsed.data
+      const raw = parseAdvisorBrief((json as { advisorBrief: unknown }).advisorBrief)
+      if (raw) advisorBrief = normalizeAdvisorBrief(raw, localReq)
     }
   } catch {
     return NextResponse.json(
       { error: 'Invalid JSON body' },
       { status: 400 },
     )
+  }
+
+  const readinessScore = advisorBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
+  const readinessTier = deriveReadinessTier(readinessScore)
+
+  if (readinessTier === 'blocked') {
+    return NextResponse.json({
+      ...buildReadinessBlockedMatchResponse(
+        readinessScore,
+        readinessTier,
+        advisorBrief?.low_intent_signals ?? [],
+      ),
+      proximityAdvisors: [],
+      rerankSource: 'fallback',
+      meta: {
+        detectedCountry: localReq.userCountryName,
+        detectedLanguage: localReq.userLanguage,
+        candidatesConsidered: 0,
+      },
+    })
   }
 
   let enriched: EnrichedMatchedAdvisorV2[] = []

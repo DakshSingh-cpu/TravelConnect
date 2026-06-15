@@ -87,6 +87,9 @@ export type Database = {
           timing: string | null
           duration: string | null
           advisor_ids: number[] | null
+          readiness_score: number | null
+          readiness_tier: string | null
+          low_intent_signals: string[] | null
           utm_source: string | null
           utm_medium: string | null
           utm_campaign: string | null
@@ -104,6 +107,9 @@ export type Database = {
           timing?: string | null
           duration?: string | null
           advisor_ids?: number[] | null
+          readiness_score?: number | null
+          readiness_tier?: string | null
+          low_intent_signals?: string[] | null
           utm_source?: string | null
           utm_medium?: string | null
           utm_campaign?: string | null

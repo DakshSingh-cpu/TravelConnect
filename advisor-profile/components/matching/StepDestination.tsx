@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { SURPRISE_ME_POOL } from '@/lib/guardrails/constants'
 
 // ── Curated Grid Destinations ────────────────────────────────────────────────
 
@@ -197,8 +198,18 @@ function StepDots({ filled }: { filled: number }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
+function isSurpriseMeDestination(value: string): boolean {
+  return value.trim().toLowerCase() === 'surprise me'
+}
+
+function pickRandomSurprise(): string {
+  const idx = Math.floor(Math.random() * SURPRISE_ME_POOL.length)
+  return SURPRISE_ME_POOL[idx]
+}
+
 export default function StepDestination({ onNext }: Props) {
   const [gridSelected, setGridSelected] = useState<string | null>(null)
+  const [surpriseResult, setSurpriseResult] = useState<string | null>(null)
 
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
@@ -295,15 +306,34 @@ export default function StepDestination({ onNext }: Props) {
     setActiveIdx(-1)
   }, [suggestions.length, isLoadingPlaces, trimmedQuery])
 
+  const handleSurpriseMe = useCallback(() => {
+    const picked = pickRandomSurprise()
+    setSurpriseResult(picked)
+    setGridSelected(picked)
+    setSearchSelected(null)
+    setQuery('')
+    setIsOpen(false)
+    setActiveIdx(-1)
+  }, [])
+
   const selectFromDropdown = useCallback((dest: Suggestion) => {
+    if (isSurpriseMeDestination(dest.label)) {
+      handleSurpriseMe()
+      return
+    }
     setQuery(dest.label)
     setSearchSelected(dest.label)
     setGridSelected(null)
     setIsOpen(false)
     setActiveIdx(-1)
-  }, [])
+  }, [handleSurpriseMe])
 
   const selectFromGrid = (id: string) => {
+    if (isSurpriseMeDestination(id)) {
+      handleSurpriseMe()
+      return
+    }
+    setSurpriseResult(null)
     setGridSelected(id)
     setSearchSelected(null)
     setQuery('')
@@ -389,7 +419,12 @@ export default function StepDestination({ onNext }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const destination = selected ?? trimmedQuery
-    if (destination) onNext(destination)
+    if (!destination) return
+    if (isSurpriseMeDestination(destination)) {
+      handleSurpriseMe()
+      return
+    }
+    onNext(destination)
   }
 
   const showLoadingRow = useDbSearch && isLoadingPlaces
@@ -409,6 +444,64 @@ export default function StepDestination({ onNext }: Props) {
     if (showEmptyApiHint) return 'No locations found'
     return `${suggestions.length} result${suggestions.length !== 1 ? 's' : ''}`
   })()
+
+  if (surpriseResult) {
+    return (
+      <div className="mx-auto w-full max-w-[36rem] px-3 sm:px-6">
+        <StepDots filled={1} />
+        <h1
+          className="mb-3 text-center font-display text-[clamp(1.75rem,1.35rem+1.8vw,2.4rem)] italic leading-[1.15] tracking-[-0.025em]"
+          style={{ color: 'var(--ink)' }}
+        >
+          We picked for you:
+        </h1>
+        <p
+          className="mx-auto mb-4 text-center font-display text-[clamp(1.5rem,1.2rem+1.5vw,2rem)] font-bold"
+          style={{ color: 'var(--teal)' }}
+        >
+          {surpriseResult}
+        </p>
+        <p
+          className="mx-auto mb-8 max-w-[28rem] text-center text-[0.9375rem] leading-relaxed"
+          style={{ color: 'var(--body)' }}
+        >
+          Not feeling it? Shuffle again or go back to pick your own.
+        </p>
+        <div className="flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onNext(surpriseResult)}
+            className="relative inline-flex items-center justify-center rounded-[9px] border-0 bg-[var(--teal)] px-7 py-3.5 font-sans text-base font-semibold tracking-[0.005em] text-white transition-transform duration-150 will-change-transform hover:bg-[var(--teal-hover)] active:scale-[0.97]"
+          >
+            Continue with {surpriseResult} →
+          </button>
+          <button
+            type="button"
+            onClick={handleSurpriseMe}
+            className="rounded-lg border px-5 py-2.5 text-sm font-semibold transition-all hover:-translate-y-0.5 hover:shadow-md"
+            style={{
+              borderColor: 'var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--ink)',
+            }}
+          >
+            Shuffle again
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSurpriseResult(null)
+              setGridSelected(null)
+            }}
+            className="mt-2 text-sm underline"
+            style={{ color: 'var(--muted)' }}
+          >
+            ← Back to all destinations
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto w-full max-w-[72rem] px-3 sm:px-6">

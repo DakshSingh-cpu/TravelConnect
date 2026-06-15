@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Attribution } from '@/lib/attribution'
-import type { MatchIntakePayload } from '@/lib/matchAdvisors'
-import type { EnrichedMatchedAdvisor } from '@/lib/matchAdvisors'
+import type { MatchIntakePayload, EnrichedMatchedAdvisor } from '@/lib/matchAdvisors'
+import type { AdvisorBrief } from '@/lib/advisorBrief'
+import { parseAdvisorBrief } from '@/lib/advisorBrief'
 import { notifyMatchedAdvisors } from '@/lib/push/notifyMatchedAdvisors'
+import { requireValidIntake } from '@/lib/guardrails/intakeGate'
+import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { deriveReadinessTier, normalizeAdvisorBrief } from '@/lib/guardrails/readiness'
+import { DEFAULT_READINESS_SCORE, DEFAULT_READINESS_TIER } from '@/lib/guardrails/constants'
 
 // Use service-role key so anonymous clients can insert without a Supabase session
 const supabaseAdmin = createClient(
@@ -15,6 +20,7 @@ type RequestBody = {
   advisors: EnrichedMatchedAdvisor[]
   intake: MatchIntakePayload
   attribution?: Attribution | null
+  advisorBrief?: AdvisorBrief | unknown
 }
 
 /**
@@ -23,6 +29,9 @@ type RequestBody = {
  * Persists intake + top-3 advisor IDs + ad attribution to match_sessions table.
  */
 export async function POST(request: Request) {
+  const rateLimited = await checkRateLimit(request, 'match-sessions', '/api/match-sessions')
+  if (rateLimited) return rateLimited
+
   let body: RequestBody
 
   try {
@@ -31,11 +40,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { advisors, intake, attribution } = body
+  const { advisors, intake, attribution, advisorBrief: rawBrief } = body
 
   if (!intake || !Array.isArray(advisors)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+
+  const intakeResult = requireValidIntake(intake, '/api/match-sessions')
+  if ('response' in intakeResult) {
+    return intakeResult.response
+  }
+  const validatedIntake: MatchIntakePayload = intakeResult.intake
+
+  const parsedBrief = rawBrief ? parseAdvisorBrief(rawBrief) : null
+  const normalizedBrief = parsedBrief
+    ? normalizeAdvisorBrief(parsedBrief, validatedIntake)
+    : null
+
+  const readinessScore = normalizedBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
+  const readinessTier = normalizedBrief
+    ? deriveReadinessTier(normalizedBrief.readiness_score)
+    : DEFAULT_READINESS_TIER
+  const lowIntentSignals = normalizedBrief?.low_intent_signals ?? []
 
   // Extract the numeric CSV agency IDs from the matched advisors
   const advisorIds = advisors
@@ -43,15 +69,17 @@ export async function POST(request: Request) {
     .filter((id): id is number => typeof id === 'number' && id > 0)
 
   const row = {
-    destination: intake.destination ?? null,
-    budget_lakh: intake.budgetLakh ?? null,
-    travel_style: intake.travelStyle ?? null,
-    vibe: intake.vibe ?? null,
-    pace: intake.pace ?? null,
-    timing: intake.timing ?? null,
-    duration: intake.duration ?? null,
+    destination: validatedIntake.destination,
+    budget_lakh: validatedIntake.budgetLakh,
+    travel_style: validatedIntake.travelStyle,
+    vibe: validatedIntake.vibe,
+    pace: validatedIntake.pace,
+    timing: validatedIntake.timing,
+    duration: validatedIntake.duration,
     advisor_ids: advisorIds.length > 0 ? advisorIds : null,
-    // Attribution — null for organic traffic
+    readiness_score: readinessScore,
+    readiness_tier: readinessTier,
+    low_intent_signals: lowIntentSignals,
     utm_source: attribution?.utm_source ?? null,
     utm_medium: attribution?.utm_medium ?? null,
     utm_campaign: attribution?.utm_campaign ?? null,
@@ -68,18 +96,18 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error('[match-sessions] Insert error:', error.message)
-    // Return 200 anyway — don't break the user's results page for a tracking failure
     return NextResponse.json({ ok: false, error: error.message }, { status: 200 })
   }
 
   const matchSessionId = inserted.id
 
-  // Notify matched advisors on mobile (non-blocking)
-  void notifyMatchedAdvisors({
-    matchSessionId,
-    advisorAgencyIds: advisorIds,
-    destination: row.destination,
-  })
+  if (readinessTier !== 'blocked' && advisorIds.length > 0) {
+    void notifyMatchedAdvisors({
+      matchSessionId,
+      advisorAgencyIds: advisorIds,
+      destination: row.destination,
+    })
+  }
 
   return NextResponse.json({ ok: true, matchSessionId })
 }

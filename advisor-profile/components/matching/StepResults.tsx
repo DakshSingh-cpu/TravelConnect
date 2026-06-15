@@ -312,6 +312,7 @@ type Props = {
   advisors: EnrichedMatchedAdvisor[]
   intake: MatchIntakePayload | null
   onBackToPreferences?: () => void
+  isNurtureLead?: boolean
 }
 
 type LocalState =
@@ -320,7 +321,7 @@ type LocalState =
   | { status: 'error'; message: string }
   | { status: 'done'; advisors: (EnrichedMatchedAdvisor & { matchReasons?: MatchReason[] })[]; geoMeta: GeoResult }
 
-export default function StepResults({ advisors, intake, onBackToPreferences }: Props) {
+export default function StepResults({ advisors, intake, onBackToPreferences, isNurtureLead = false }: Props) {
   const [localState, setLocalState] = useState<LocalState>({ status: 'idle' })
 
   const handleShowLocal = useCallback(async () => {
@@ -400,6 +401,20 @@ export default function StepResults({ advisors, intake, onBackToPreferences }: P
         <p className="mx-auto mt-3 max-w-xl text-sm" style={{ color: 'var(--muted)' }}>
           {summary}. Each card explains why they fit — then chat or open a full profile when you are ready.
         </p>
+        {isNurtureLead && (
+          <p
+            className="mx-auto mt-4 max-w-lg rounded-xl border px-4 py-3 text-sm"
+            style={{
+              borderColor: 'var(--border)',
+              background: 'var(--surface-2)',
+              color: 'var(--body)',
+            }}
+            role="status"
+          >
+            You are still exploring options — these advisors are a great starting point. Share firmer dates
+            or budget when you chat to move faster.
+          </p>
+        )}
       </div>
 
       <motion.ul

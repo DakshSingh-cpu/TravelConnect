@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 import { buildMockMatchedAdvisors, defaultIntakePayload, parseIntakeBody } from '@/lib/matchAdvisors'
+import {
+  MatchGuardrailError,
+  fetchMatchedAdvisors,
+  type MatchFetchResult,
+} from '@/lib/guardrails/matchFetch'
 
 const CHECK_ITEMS = [
   { icon: '🌍', text: 'Filtering by destination expertise and regional knowledge' },
@@ -16,10 +21,17 @@ const CHECK_ITEMS = [
 const REDIRECT_MS = CHECK_ITEMS.length * 100 + 300
 const SPINNER_HIDE_MS = CHECK_ITEMS.length * 100 + 100
 
+export type MatchCompleteMeta = {
+  isNurtureLead?: boolean
+  readinessTier?: MatchFetchResult['readinessTier']
+  readinessScore?: number
+}
+
 type Props = {
   intake: MatchIntakePayload | null
   advisorBrief?: AdvisorBrief | null
-  onComplete: (advisors: EnrichedMatchedAdvisor[]) => void
+  onComplete: (advisors: EnrichedMatchedAdvisor[], meta?: MatchCompleteMeta) => void
+  onGuardrailBlocked?: (message: string, code?: MatchGuardrailError['code']) => void
 }
 
 function readIntakeFromSession(): MatchIntakePayload | null {
@@ -32,25 +44,6 @@ function readIntakeFromSession(): MatchIntakePayload | null {
   } catch {
     return null
   }
-}
-
-async function fetchMatches(
-  payload: MatchIntakePayload,
-  brief?: AdvisorBrief | null,
-): Promise<EnrichedMatchedAdvisor[]> {
-  const res = await fetch('/api/match-advisors', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...payload, advisorBrief: brief ?? undefined }),
-  })
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}))
-    throw new Error((errData as { error?: string }).error || 'match request failed')
-  }
-  const data = (await res.json()) as { advisors?: EnrichedMatchedAdvisor[] }
-  // Fall back to mock (without enrichment) if API returns unexpected shape
-  if (Array.isArray(data.advisors) && data.advisors.length > 0) return data.advisors
-  return buildMockMatchedAdvisors(payload).map((a) => ({ ...a, agentProfile: null }))
 }
 
 function StepDots() {
@@ -67,19 +60,30 @@ function StepDots() {
   )
 }
 
-export default function StepMatching({ intake, advisorBrief, onComplete }: Props) {
+export default function StepMatching({ intake, advisorBrief, onComplete, onGuardrailBlocked }: Props) {
   const [visible, setVisible] = useState<boolean[]>(() => CHECK_ITEMS.map(() => false))
   const [showSpinner, setShowSpinner] = useState(true)
   const finished = useRef(false)
-  const matchPromise = useRef<Promise<EnrichedMatchedAdvisor[]> | null>(null)
+  const matchPromise = useRef<Promise<MatchFetchResult> | null>(null)
 
   useEffect(() => {
     const payload = intake ?? readIntakeFromSession() ?? defaultIntakePayload()
-    matchPromise.current = fetchMatches(payload, advisorBrief).catch((err) => {
-      console.error('[StepMatching] matchAgencies API error:', err.message ?? err)
-      return buildMockMatchedAdvisors(payload, advisorBrief).map((a) => ({ ...a, agentProfile: null }))
-    })
-  }, [intake, advisorBrief])
+    matchPromise.current = fetchMatchedAdvisors(payload, advisorBrief)
+      .then((result) => result)
+      .catch((err) => {
+        if (err instanceof MatchGuardrailError) {
+          onGuardrailBlocked?.(err.message, err.code)
+          return { advisors: [] }
+        }
+        console.error('[StepMatching] matchAgencies API error:', err.message ?? err)
+        return {
+          advisors: buildMockMatchedAdvisors(payload, advisorBrief).map((a) => ({
+            ...a,
+            agentProfile: null,
+          })),
+        }
+      })
+  }, [intake, advisorBrief, onGuardrailBlocked])
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = []
@@ -106,8 +110,27 @@ export default function StepMatching({ intake, advisorBrief, onComplete }: Props
       setTimeout(async () => {
         if (finished.current) return
         finished.current = true
-        const advisors = (await matchPromise.current) ?? buildMockMatchedAdvisors(defaultIntakePayload()).map((a) => ({ ...a, agentProfile: null }))
-        onComplete(advisors)
+        try {
+          const result =
+            (await matchPromise.current) ?? {
+              advisors: buildMockMatchedAdvisors(defaultIntakePayload()).map((a) => ({
+                ...a,
+                agentProfile: null,
+              })),
+            }
+          onComplete(result.advisors, {
+            isNurtureLead: result.isNurtureLead,
+            readinessTier: result.readinessTier,
+            readinessScore: result.readinessScore,
+          })
+        } catch (err) {
+          if (err instanceof MatchGuardrailError) {
+            return
+          }
+          onComplete(
+            buildMockMatchedAdvisors(defaultIntakePayload()).map((a) => ({ ...a, agentProfile: null })),
+          )
+        }
       }, REDIRECT_MS),
     )
 

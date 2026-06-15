@@ -6,15 +6,10 @@ import type { AgentProfile } from '@/lib/agencyDataProcessor'
  * Replace `buildMockMatchedAdvisors` with an LLM call (OpenAI / Anthropic) later.
  */
 
-export type MatchIntakePayload = {
-  destination: string
-  budgetLakh: number
-  travelStyle: string
-  vibe: string
-  pace: string
-  timing: string
-  duration: string
-}
+export type { MatchIntakePayload } from '@/lib/intakeValidation'
+import type { MatchIntakePayload } from '@/lib/intakeValidation'
+import { parseAndValidateIntake } from '@/lib/intakeValidation'
+import { INTAKE_FIELD_DEFAULTS } from '@/lib/guardrails/constants'
 
 export type MatchedAdvisor = {
   id: string
@@ -183,37 +178,12 @@ export function defaultIntakePayload(): MatchIntakePayload {
     destination: 'Western Europe',
     budgetLakh: 15,
     travelStyle: 'Family',
-    vibe: 'Culture',
-    pace: 'Balanced',
-    timing: 'Next 6 months',
-    duration: '1-2 weeks',
+    ...INTAKE_FIELD_DEFAULTS,
   }
 }
 
-function trimStr(v: unknown): string | null {
-  if (typeof v !== 'string') return null
-  const t = v.trim()
-  return t.length ? t : null
-}
-
+/** Lenient parse for session restore — returns null when intake fails guardrails. */
 export function parseIntakeBody(body: unknown): MatchIntakePayload | null {
-  if (!body || typeof body !== 'object') return null
-  const o = body as Record<string, unknown>
-  const destination = typeof o.destination === 'string' ? o.destination : ''
-  const budgetLakh =
-    typeof o.budgetLakh === 'number' && Number.isFinite(o.budgetLakh) ? o.budgetLakh : Number(o.budgetLakh)
-  const travelStyle = typeof o.travelStyle === 'string' ? o.travelStyle : ''
-  if (!destination.trim() || !travelStyle.trim() || Number.isNaN(budgetLakh)) return null
-
-  const fallback = defaultIntakePayload()
-
-  return {
-    destination: destination.trim(),
-    budgetLakh: Math.min(50, Math.max(5, budgetLakh)),
-    travelStyle: travelStyle.trim(),
-    vibe: trimStr(o.vibe) ?? fallback.vibe,
-    pace: trimStr(o.pace) ?? fallback.pace,
-    timing: trimStr(o.timing) ?? fallback.timing,
-    duration: trimStr(o.duration) ?? fallback.duration,
-  }
+  const result = parseAndValidateIntake(body)
+  return result.success ? result.data : null
 }

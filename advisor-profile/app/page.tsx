@@ -7,13 +7,14 @@ import { readMatchSession, persistMatchSession, MATCH_RESULTS_VIEW } from '@/lib
 import StepDestination from '@/components/matching/StepDestination'
 import TravellerReturnModal from '@/components/matching/TravellerReturnModal'
 import StepPreferences from '@/components/matching/StepPreferences'
-import StepAIConcierge from '@/components/matching/StepAIConcierge'
+import StepAIConcierge, { CHAT_MESSAGES_KEY as CONCIERGE_MESSAGES_KEY } from '@/components/matching/StepAIConcierge'
 import StepMatching from '@/components/matching/StepMatching'
 import StepResults from '@/components/matching/StepResults'
 import RoleSelectionScreen from '@/components/matching/RoleSelectionScreen'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
+import { validateIntake } from '@/lib/intakeValidation'
 import AuthModal from '@/components/auth/AuthModal'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import {
@@ -41,11 +42,15 @@ export default function MatchingIntakePage() {
   const [duration, setDuration] = useState<string | null>('1-2 weeks')
   const [advisorBrief, setAdvisorBrief] = useState<AdvisorBrief | null>(null)
   const [matchedAdvisors, setMatchedAdvisors] = useState<EnrichedMatchedAdvisor[] | null>(null)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
+  const [isNurtureLead, setIsNurtureLead] = useState(false)
 
   const intakePayload: MatchIntakePayload | null =
     destination && travelStyle && vibe && pace && timing && duration
       ? { destination, budgetLakh, travelStyle, vibe, pace, timing, duration }
       : null
+
+  const intakeIsValid = intakePayload ? validateIntake(intakePayload).valid : false
 
   const handleConciergeHandoff = useCallback((brief: AdvisorBrief) => {
     setAdvisorBrief(brief)
@@ -54,12 +59,15 @@ export default function MatchingIntakePage() {
   }, [])
 
   const handleMatchingComplete = useCallback(
-    (advisors: EnrichedMatchedAdvisor[]) => {
+    (advisors: EnrichedMatchedAdvisor[], meta?: { isNurtureLead?: boolean }) => {
       setMatchedAdvisors(advisors)
+      setIsNurtureLead(meta?.isNurtureLead ?? false)
       setCurrentStep(4)
       if (intakePayload) {
         persistMatchSession(advisors, intakePayload, advisorBrief)
       }
+      // Matching fully succeeded — safe to clear the concierge chat history now
+      try { sessionStorage.removeItem(CONCIERGE_MESSAGES_KEY) } catch { /* ignore */ }
     },
     [intakePayload, advisorBrief],
   )
@@ -214,21 +222,29 @@ export default function MatchingIntakePage() {
               initialTravelStyle={travelStyle}
               onBack={() => setCurrentStep(0)}
               onNext={({ budgetLakh: b, travelStyle: style }) => {
+                if (!destination) return
+                const candidate: MatchIntakePayload = {
+                  destination,
+                  budgetLakh: b,
+                  travelStyle: style,
+                  vibe: vibe ?? 'Culture',
+                  pace: pace ?? 'Balanced',
+                  timing: timing ?? 'Next 6 months',
+                  duration: duration ?? '1-2 weeks',
+                }
+                const gate = validateIntake(candidate)
+                if (!gate.valid) {
+                  setIntakeError(gate.message ?? 'Please complete all fields.')
+                  return
+                }
+                setIntakeError(null)
                 setBudgetLakh(b)
                 setTravelStyle(style)
-                if (typeof window !== 'undefined' && destination) {
+                if (typeof window !== 'undefined') {
                   try {
                     sessionStorage.setItem(
                       'tbo_match_intake',
-                      JSON.stringify({
-                        destination,
-                        budgetLakh: b,
-                        travelStyle: style,
-                        vibe,
-                        pace,
-                        timing,
-                        duration,
-                      }),
+                      JSON.stringify(candidate),
                     )
                   } catch {
                     /* ignore */
@@ -237,15 +253,26 @@ export default function MatchingIntakePage() {
                 setCurrentStep(2)
               }}
             />
+            {intakeError && (
+              <p className="mt-2 text-center text-sm text-red-600" role="alert">
+                {intakeError}
+              </p>
+            )}
           </div>
         )}
 
-        {currentStep === 2 && intakePayload && (
+        {currentStep === 2 && intakePayload && intakeIsValid && (
           <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
+            {intakeError && (
+              <p className="mb-2 text-center text-sm text-red-600" role="alert">
+                {intakeError}
+              </p>
+            )}
             <StepAIConcierge
               intake={intakePayload}
               onBack={() => setCurrentStep(1)}
               onHandoff={handleConciergeHandoff}
+              onTransferStarted={() => setIntakeError(null)}
             />
           </div>
         )}
@@ -256,6 +283,10 @@ export default function MatchingIntakePage() {
               intake={intakePayload}
               advisorBrief={advisorBrief}
               onComplete={handleMatchingComplete}
+              onGuardrailBlocked={(message, code) => {
+                setIntakeError(message)
+                setCurrentStep(code === 'READINESS_BLOCKED' ? 2 : 1)
+              }}
             />
           </div>
         )}
@@ -265,6 +296,7 @@ export default function MatchingIntakePage() {
             <StepResults
               advisors={matchedAdvisors}
               intake={intakePayload}
+              isNurtureLead={isNurtureLead}
               onBackToPreferences={() => {
                 setMatchedAdvisors(null)
                 setAdvisorBrief(null)

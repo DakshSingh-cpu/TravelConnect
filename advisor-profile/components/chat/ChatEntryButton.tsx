@@ -3,9 +3,11 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import AuthModal from '@/components/auth/AuthModal'
+import PhoneVerificationModal from '@/components/matching/PhoneVerificationModal'
 import { openChatWithAdvisor } from '@/lib/chat/conversations'
 import { readMatchSessionId } from '@/lib/matchSession'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
+import { isPhoneVerifiedFromUser } from '@/lib/phoneVerification'
 
 type Props = {
   advisorRouteId: string
@@ -16,7 +18,7 @@ type Props = {
 
 /**
  * Drop-in handler for "Chat with [Name]" buttons.
- * Shows auth modal when needed, then navigates to /chat/[conversationId].
+ * Gate order: auth -> phone OTP -> chat creation.
  */
 export default function ChatEntryButton({
   advisorRouteId,
@@ -25,11 +27,13 @@ export default function ChatEntryButton({
   style,
 }: Props) {
   const router = useRouter()
-  const { session, loading } = useSupabaseSession()
+  const { session, loading, refresh } = useSupabaseSession()
   const [authOpen, setAuthOpen] = useState(false)
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const resumeAfterAuth = useRef(false)
+  const resumeAfterPhone = useRef(false)
 
   const firstName = advisorDisplayName.split(' ')[0]
 
@@ -49,6 +53,11 @@ export default function ChatEntryButton({
           setAuthOpen(true)
           return
         }
+        if (result.reason === 'phone_not_verified') {
+          resumeAfterPhone.current = true
+          setPhoneModalOpen(true)
+          return
+        }
         if (result.reason === 'advisor_not_linked') {
           alert('This advisor has not set up their messaging inbox yet.')
           setBusy(false)
@@ -57,6 +66,7 @@ export default function ChatEntryButton({
       }
 
       resumeAfterAuth.current = false
+      resumeAfterPhone.current = false
       if (result.briefSaveFailed) {
         setError(
           'Chat opened, but your trip brief could not be saved for the advisor. Open chat from match results again or reload this thread.',
@@ -73,6 +83,14 @@ export default function ChatEntryButton({
   useEffect(() => {
     if (!resumeAfterAuth.current || loading || !session) return
     setAuthOpen(false)
+
+    if (!isPhoneVerifiedFromUser(session.user)) {
+      resumeAfterAuth.current = false
+      resumeAfterPhone.current = true
+      setPhoneModalOpen(true)
+      return
+    }
+
     void startChat()
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only resume when session appears
   }, [session, loading])
@@ -86,6 +104,15 @@ export default function ChatEntryButton({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, loading, advisorRouteId])
+
+  async function handlePhoneVerified() {
+    setPhoneModalOpen(false)
+    await refresh()
+    if (resumeAfterPhone.current) {
+      resumeAfterPhone.current = false
+      void startChat()
+    }
+  }
 
   return (
     <>
@@ -101,7 +128,7 @@ export default function ChatEntryButton({
           style ?? { background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }
         }
       >
-        {busy ? 'Opening chat…' : `Chat with ${firstName} →`}
+        {busy ? 'Opening chat\u2026' : `Chat with ${firstName} \u2192`}
       </button>
 
       {error && (
@@ -124,6 +151,17 @@ export default function ChatEntryButton({
         title={`Chat with ${firstName}`}
         subtitle="Sign in to send a message to your advisor."
       />
+
+      {phoneModalOpen && (
+        <PhoneVerificationModal
+          onVerified={() => void handlePhoneVerified()}
+          onDismiss={() => {
+            resumeAfterPhone.current = false
+            setPhoneModalOpen(false)
+            setBusy(false)
+          }}
+        />
+      )}
     </>
   )
 }

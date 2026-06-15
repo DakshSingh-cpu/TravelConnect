@@ -18,6 +18,7 @@ import {
   readMatchSession,
 } from '@/lib/matchSession'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
+import { validateIntake } from '@/lib/intakeValidation'
 
 // ── Step name ↔ URL param mapping ─────────────────────────────────────────────
 // Each step gets its own URL so the Android back button navigates between
@@ -46,13 +47,14 @@ function persistIntakePartial(partial: Record<string, unknown>) {
 async function saveMatchSession(
   advisors: EnrichedMatchedAdvisor[],
   intake: MatchIntakePayload,
+  brief?: AdvisorBrief | null,
 ) {
   try {
     const attribution = readAttribution()
     const res = await fetch('/api/match-sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ advisors, intake, attribution }),
+      body: JSON.stringify({ advisors, intake, attribution, advisorBrief: brief ?? undefined }),
     })
     if (!res.ok) return
 
@@ -81,6 +83,8 @@ function StartFunnelInner() {
 
   const [advisorBrief, setAdvisorBrief] = useState<AdvisorBrief | null>(null)
   const [matchedAdvisors, setMatchedAdvisors] = useState<EnrichedMatchedAdvisor[] | null>(null)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
+  const [isNurtureLead, setIsNurtureLead] = useState(false)
 
   // Sensible defaults for fields not collected in 3-question funnel
   const vibe = 'Culture'
@@ -92,6 +96,8 @@ function StartFunnelInner() {
     destination && travelStyle
       ? { destination, budgetLakh, travelStyle, vibe, pace, timing, duration }
       : null
+
+  const intakeIsValid = intakePayload ? validateIntake(intakePayload).valid : false
 
   // On mount: capture UTM params from ad click + set role
   useEffect(() => {
@@ -134,6 +140,14 @@ function StartFunnelInner() {
     [router],
   )
 
+  // Block ?step=chat deep-links when session intake fails guardrails
+  useEffect(() => {
+    if (currentStep === 3 && intakePayload && !intakeIsValid) {
+      setIntakeError(validateIntake(intakePayload).message ?? 'Please update your trip details.')
+      goTo('style')
+    }
+  }, [currentStep, intakePayload, intakeIsValid, goTo])
+
   const handleConciergeHandoff = useCallback(
     (brief: AdvisorBrief) => {
       setAdvisorBrief(brief)
@@ -144,14 +158,13 @@ function StartFunnelInner() {
   )
 
   const handleMatchingComplete = useCallback(
-    (advisors: EnrichedMatchedAdvisor[]) => {
+    (advisors: EnrichedMatchedAdvisor[], meta?: { isNurtureLead?: boolean }) => {
       setMatchedAdvisors(advisors)
+      setIsNurtureLead(meta?.isNurtureLead ?? false)
       goTo('results')
       if (intakePayload) {
-        // Persist to sessionStorage for page.tsx-style session continuity
         persistMatchSession(advisors, intakePayload, advisorBrief)
-        // Also persist to DB for ad attribution analytics (fire-and-forget)
-        void saveMatchSession(advisors, intakePayload)
+        void saveMatchSession(advisors, intakePayload, advisorBrief)
       }
     },
     [intakePayload, advisorBrief, goTo],
@@ -208,6 +221,22 @@ function StartFunnelInner() {
               initialTravelStyle={travelStyle}
               onBack={() => goTo('budget')}
               onNext={(style) => {
+                if (!destination) return
+                const candidate: MatchIntakePayload = {
+                  destination,
+                  budgetLakh,
+                  travelStyle: style,
+                  vibe,
+                  pace,
+                  timing,
+                  duration,
+                }
+                const gate = validateIntake(candidate)
+                if (!gate.valid) {
+                  setIntakeError(gate.message ?? 'Please complete all fields.')
+                  return
+                }
+                setIntakeError(null)
                 setTravelStyle(style)
                 persistIntakePartial({
                   destination,
@@ -221,12 +250,22 @@ function StartFunnelInner() {
                 goTo('chat')
               }}
             />
+            {intakeError && (
+              <p className="mt-2 text-center text-sm text-red-600" role="alert">
+                {intakeError}
+              </p>
+            )}
           </div>
         )}
 
         {/* Step 3: AI Concierge Chat */}
-        {currentStep === 3 && intakePayload && (
+        {currentStep === 3 && intakePayload && intakeIsValid && (
           <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
+            {intakeError && (
+              <p className="mb-2 text-center text-sm text-red-600" role="alert">
+                {intakeError}
+              </p>
+            )}
             <StepAIConcierge
               intake={intakePayload}
               onBack={() => goTo('style')}
@@ -242,6 +281,10 @@ function StartFunnelInner() {
               intake={intakePayload}
               advisorBrief={advisorBrief}
               onComplete={handleMatchingComplete}
+              onGuardrailBlocked={(message, code) => {
+                setIntakeError(message)
+                goTo(code === 'READINESS_BLOCKED' ? 'chat' : 'style')
+              }}
             />
           </div>
         )}
@@ -252,6 +295,7 @@ function StartFunnelInner() {
             <StepResults
               advisors={matchedAdvisors}
               intake={intakePayload}
+              isNurtureLead={isNurtureLead}
               onBackToPreferences={() => {
                 setMatchedAdvisors(null)
                 setAdvisorBrief(null)

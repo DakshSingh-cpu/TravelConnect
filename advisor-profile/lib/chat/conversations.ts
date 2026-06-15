@@ -44,7 +44,7 @@ export async function getOrCreateDirectConversation(peerUserId: string): Promise
 
 /**
  * Opens chat with an advisor: resolves their auth user, then finds/creates the conversation.
- * Returns `{ conversationId }` or `{ needsAuth: true }` when there is no session.
+ * Returns `{ conversationId }` or a failure reason when auth / phone / link checks fail.
  */
 export async function openChatWithAdvisor(
   advisorRouteId: string,
@@ -52,6 +52,7 @@ export async function openChatWithAdvisor(
 ): Promise<
   | { ok: true; conversationId: string; briefSaveFailed?: boolean }
   | { ok: false; reason: 'not_authenticated' }
+  | { ok: false; reason: 'phone_not_verified' }
   | { ok: false; reason: 'advisor_not_linked'; advisorRouteId: string }
 > {
   const supabase = createClient()
@@ -63,6 +64,10 @@ export async function openChatWithAdvisor(
     return { ok: false, reason: 'not_authenticated' }
   }
 
+  if (!session.user.phone) {
+    return { ok: false, reason: 'phone_not_verified' }
+  }
+
   await ensureMyProfile()
 
   const peerUserId = await resolveAdvisorUserId(advisorRouteId)
@@ -70,7 +75,15 @@ export async function openChatWithAdvisor(
     return { ok: false, reason: 'advisor_not_linked', advisorRouteId }
   }
 
-  const conversationId = await getOrCreateDirectConversation(peerUserId)
+  let conversationId: string
+  try {
+    conversationId = await getOrCreateDirectConversation(peerUserId)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Phone verification required')) {
+      return { ok: false, reason: 'phone_not_verified' }
+    }
+    throw err
+  }
 
   if (matchSessionId) {
     const { error: linkError } = await supabase.rpc('link_conversation_to_match_session', {
