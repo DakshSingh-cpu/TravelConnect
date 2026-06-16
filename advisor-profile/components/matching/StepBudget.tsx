@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 
-const MIN_L = 5
-const MAX_L = 50
+const MIN_L = 0
+const MAX_L = 100
 const STEP = 0.5
 
 function formatLakh(n: number): string {
@@ -164,7 +164,7 @@ export default function StepBudget({ initialBudgetLakh = 15, onNext, onBack }: P
           className="mt-3 text-center text-[0.6875rem] leading-snug"
           style={{ color: 'var(--muted)' }}
         >
-          Slide or type between ₹5L and ₹50L (total trip budget).
+          Slide or type between ₹0L and ₹100L (total trip budget).
         </p>
       </fieldset>
 

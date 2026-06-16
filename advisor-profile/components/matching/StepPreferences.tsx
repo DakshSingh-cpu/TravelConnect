@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react'
 
-const MIN_L = 5
-const MAX_L = 50
+const MIN_L = 0
+const MAX_L = 100
 const STEP = 0.5
 
 const STYLES = [
@@ -193,7 +193,7 @@ export default function StepPreferences({
           id="budget-hint"
           style={{ color: 'var(--muted)' }}
         >
-          Slide or type between ₹5L and ₹50L (total trip budget).
+          Slide or type between ₹0L and ₹100L (total trip budget).
         </p>
       </fieldset>
 
