@@ -304,12 +304,12 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
 
   return (
     <motion.div
-      className="flex min-h-0 w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(220px,17rem)_1fr] lg:items-stretch lg:gap-5 xl:grid-cols-[minmax(260px,20rem)_1fr] xl:gap-6"
+      className="flex min-h-0 h-full w-full flex-1 flex-col gap-4 lg:grid lg:grid-cols-[minmax(220px,17rem)_1fr] lg:items-stretch lg:gap-5 xl:grid-cols-[minmax(260px,20rem)_1fr] xl:gap-6"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
     >
-      <aside className="flex shrink-0 flex-col gap-3 lg:pt-1">
+      <aside className="flex shrink-0 flex-col gap-3 lg:pt-1 lg:sticky lg:top-0 lg:self-start">
         <StepDots />
         {wasRestored && (
           <p
@@ -357,11 +357,10 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
       </aside>
 
       <motion.div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border shadow-[0_4px_24px_rgba(28,25,23,0.08)]"
+        className="flex min-h-0 min-w-0 flex-1 h-full flex-col overflow-hidden rounded-2xl border shadow-[0_4px_24px_rgba(28,25,23,0.08)]"
         style={{
           background: 'var(--card-bg)',
           borderColor: 'var(--border)',
-          minHeight: 'min(560px, calc(100dvh - 10rem))',
         }}
         layout
       >

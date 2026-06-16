@@ -172,7 +172,7 @@ function StartFunnelInner() {
 
   return (
     <div
-      className="flex flex-1 flex-col"
+      className="flex min-h-0 h-full flex-1 flex-col"
       style={{
         background:
           'radial-gradient(ellipse 90% 45% at 50% -8%, var(--grad-1) 0%, transparent 55%), var(--cream)',
@@ -181,7 +181,7 @@ function StartFunnelInner() {
 
       <main
         id="main"
-        className={`relative isolate z-10 mx-auto flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col ${
+        className={`relative isolate z-10 mx-auto flex min-h-0 h-full w-full flex-1 flex-col ${
           currentStep === 3 ? 'max-w-none' : 'max-w-[90rem]'
         }`}
         role="main"
@@ -260,7 +260,7 @@ function StartFunnelInner() {
 
         {/* Step 3: AI Concierge Chat */}
         {currentStep === 3 && intakePayload && intakeIsValid && (
-          <div className="flex min-h-[calc(100dvh-3.25rem)] w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
+          <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 lg:px-5 lg:py-4">
             {intakeError && (
               <p className="mb-2 text-center text-sm text-red-600" role="alert">
                 {intakeError}
