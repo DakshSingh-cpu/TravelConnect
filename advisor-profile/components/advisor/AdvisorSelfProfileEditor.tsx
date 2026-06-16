@@ -8,6 +8,13 @@ import { useAccountRole } from '@/hooks/useAccountRole'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { parseAgencyIdFromAdvisorRoute } from '@/lib/matchAdvisors'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
+import {
+  getAdvisorPreferences,
+  saveAdvisorPreferences,
+  validateAdvisorPreferences,
+  ADVISOR_PREF_DEFAULTS,
+  type AdvisorPreferences,
+} from '@/lib/advisorPreferences'
 
 export default function AdvisorSelfProfileEditor() {
   const { user, loading: sessionLoading } = useSupabaseSession()
@@ -21,7 +28,18 @@ export default function AdvisorSelfProfileEditor() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
 
+  const [prefs, setPrefs] = useState<AdvisorPreferences>({ ...ADVISOR_PREF_DEFAULTS })
+  const [savingPrefs, setSavingPrefs] = useState(false)
+  const [prefsMessage, setPrefsMessage] = useState<{ text: string; ok: boolean } | null>(null)
+  const [prefsValidationError, setPrefsValidationError] = useState<string | null>(null)
+
   const agencyId = advisorLink ? parseAgencyIdFromAdvisorRoute(advisorLink.advisorRouteId) : null
+
+  useEffect(() => {
+    if (user?.id) {
+      void getAdvisorPreferences(user.id).then(setPrefs)
+    }
+  }, [user?.id])
 
   useEffect(() => {
     if (!advisorLink) {
@@ -76,6 +94,29 @@ export default function AdvisorSelfProfileEditor() {
     }
 
     setMessage({ text: 'Saved. Travellers will see your updated introduction on your public profile.', ok: true })
+  }
+
+  async function handleSavePrefs() {
+    if (!user) return
+
+    const result = validateAdvisorPreferences(prefs)
+    if (!result.success) {
+      setPrefsValidationError(result.error)
+      return
+    }
+    setPrefsValidationError(null)
+
+    setSavingPrefs(true)
+    setPrefsMessage(null)
+
+    const { error } = await saveAdvisorPreferences(user.id, result.data)
+    setSavingPrefs(false)
+
+    if (error) {
+      setPrefsMessage({ text: error, ok: false })
+      return
+    }
+    setPrefsMessage({ text: 'Lead preferences saved.', ok: true })
   }
 
   if (sessionLoading || linkLoading) {
@@ -257,6 +298,94 @@ export default function AdvisorSelfProfileEditor() {
           </Link>
         </div>
       </form>
+
+      {/* Lead quality preferences */}
+      <div
+        className="mt-6 rounded-2xl border p-6 shadow-sm"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+      >
+        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--section-label)' }}>
+          Lead quality preferences
+        </p>
+        <p className="mb-5 text-xs" style={{ color: 'var(--muted)' }}>
+          We will only send you leads that meet these thresholds.
+        </p>
+
+        <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+          Minimum readiness score: {prefs.min_readiness_score}
+        </label>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={prefs.min_readiness_score}
+          onChange={(e) => {
+            const raw = Number(e.target.value)
+            setPrefs((p) => ({ ...p, min_readiness_score: Math.min(100, Math.max(0, raw)) }))
+          }}
+          className="mb-1 w-full"
+        />
+        <div className="mb-5 flex justify-between text-xs" style={{ color: 'var(--muted)' }}>
+          <span>All leads (0)</span>
+          <span>Warm+ (50)</span>
+          <span>Hot only (75)</span>
+        </div>
+
+        <label className="mb-1 block text-xs font-semibold" style={{ color: 'var(--muted)' }}>
+          Minimum budget (₹ lakh)
+        </label>
+        <input
+          type="number"
+          min={0}
+          max={9999.99}
+          step={0.5}
+          value={prefs.min_budget_lakh}
+          onChange={(e) => {
+            const raw = parseFloat(e.target.value)
+            if (Number.isNaN(raw) || raw < 0) return
+            setPrefs((p) => ({ ...p, min_budget_lakh: Math.min(9999.99, raw) }))
+          }}
+          className="mb-5 w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:ring-2"
+          style={{ borderColor: 'var(--border)', background: 'var(--cream)', color: 'var(--ink)' }}
+        />
+
+        <label className="mb-5 flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={prefs.accept_nurture_leads}
+            onChange={(e) => setPrefs((p) => ({ ...p, accept_nurture_leads: e.target.checked }))}
+            className="mt-0.5 h-4 w-4 rounded border"
+            style={{ accentColor: 'var(--teal)' }}
+          />
+          <span className="text-xs leading-relaxed" style={{ color: 'var(--body)' }}>
+            Accept nurture leads — opt in to receive early-stage leads who are still exploring.
+            These leads have lower readiness scores but may convert with guidance.
+          </span>
+        </label>
+
+        {prefsValidationError && (
+          <p className="mb-4 text-sm font-medium" style={{ color: '#b91c1c' }}>
+            {prefsValidationError}
+          </p>
+        )}
+
+        {prefsMessage && (
+          <p className="mb-4 text-sm font-medium" style={{ color: prefsMessage.ok ? 'var(--teal)' : '#b91c1c' }}>
+            {prefsMessage.text}
+          </p>
+        )}
+
+        <button
+          type="button"
+          disabled={savingPrefs}
+          onClick={() => void handleSavePrefs()}
+          className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-60"
+          style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
+        >
+          {savingPrefs ? 'Saving…' : 'Save preferences'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -15,6 +15,7 @@ export type ChatMessage = {
 export type InboxConversation = {
   id: string
   updated_at: string
+  status?: 'active' | 'archived' | 'completed'
   peer: ChatUser
   lastMessage: ChatMessage | null
 }

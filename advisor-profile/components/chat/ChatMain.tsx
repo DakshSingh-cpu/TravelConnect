@@ -9,6 +9,8 @@ import { useChatMessages } from '@/hooks/useChatMessages'
 import { useConversationBrief } from '@/hooks/useConversationBrief'
 import { useTravellerBriefSync } from '@/hooks/useTravellerBriefSync'
 import { isLinkedTravelAdvisor } from '@/lib/chat/peerRole'
+import { fetchConversationStatus } from '@/lib/chat/conversations'
+import type { ConversationStatus } from '@/lib/guardrails/ghostPrevention'
 import type { ChatUser } from '@/lib/chat/types'
 
 type Props = {
@@ -53,7 +55,10 @@ export default function ChatMain({
   const [draft, setDraft] = useState('')
   const [peerIsAdvisor, setPeerIsAdvisor] = useState<boolean | null>(null)
   const [briefOpen, setBriefOpen] = useState(false)
+  const [convStatus, setConvStatus] = useState<ConversationStatus>('active')
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  const isArchived = convStatus !== 'active'
 
   const displayName = peerDisplayName(peer, peerIsAdvisor)
   const canOpenBrief = viewerIsAdvisor
@@ -73,6 +78,14 @@ export default function ChatMain({
       cancelled = true
     }
   }, [peer?.id])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchConversationStatus(conversationId).then((s) => {
+      if (!cancelled && s) setConvStatus(s)
+    })
+    return () => { cancelled = true }
+  }, [conversationId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -201,6 +214,21 @@ export default function ChatMain({
             'radial-gradient(circle at 20% 10%, rgba(15,110,86,0.04) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(186,117,23,0.04) 0%, transparent 35%)',
         }}
       >
+        {isArchived && (
+          <div
+            className="mx-auto mb-4 max-w-3xl rounded-xl border px-4 py-3 text-center text-sm leading-relaxed"
+            style={{ borderColor: 'rgba(186,117,23,0.3)', background: '#fef9ee', color: '#92400e' }}
+            role="status"
+          >
+            <p className="font-semibold">This conversation has been archived.</p>
+            <p className="mt-1 text-xs" style={{ color: '#b45309' }}>
+              {viewerIsAdvisor
+                ? 'The traveller did not reply within 48 hours. Focus on your active leads.'
+                : 'No reply was received within 48 hours and this thread was archived.'}
+            </p>
+          </div>
+        )}
+
         {loading && (
           <p className="text-center text-sm" style={{ color: 'var(--muted)' }}>
             Loading messages…
@@ -244,34 +272,40 @@ export default function ChatMain({
             {error}
           </p>
         )}
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="mx-auto flex max-w-3xl items-end gap-2"
-        >
-          <textarea
-            rows={1}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                void handleSend()
-              }
-            }}
-            placeholder="Type a message"
-            className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border px-4 py-2.5 text-sm outline-none focus:ring-2"
-            style={{ borderColor: 'var(--border)', background: 'var(--cream)' }}
-            disabled={sending}
-          />
-          <button
-            type="submit"
-            disabled={sending || !draft.trim()}
-            className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
+        {isArchived ? (
+          <p className="text-center text-xs" style={{ color: 'var(--muted)' }}>
+            This conversation is read-only.
+          </p>
+        ) : (
+          <form
+            onSubmit={(e) => void handleSubmit(e)}
+            className="mx-auto flex max-w-3xl items-end gap-2"
           >
-            Send
-          </button>
-        </form>
+            <textarea
+              rows={1}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  void handleSend()
+                }
+              }}
+              placeholder="Type a message"
+              className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border px-4 py-2.5 text-sm outline-none focus:ring-2"
+              style={{ borderColor: 'var(--border)', background: 'var(--cream)' }}
+              disabled={sending}
+            />
+            <button
+              type="submit"
+              disabled={sending || !draft.trim()}
+              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-95 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
+            >
+              Send
+            </button>
+          </form>
+        )}
       </footer>
     </section>
     </LayoutGroup>

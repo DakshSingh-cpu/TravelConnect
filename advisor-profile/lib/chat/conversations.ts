@@ -43,6 +43,28 @@ export async function getOrCreateDirectConversation(peerUserId: string): Promise
 }
 
 /**
+ * Fetches the status of a conversation the current user participates in.
+ * Returns null if the conversation doesn't exist or the user isn't a participant.
+ */
+export async function fetchConversationStatus(
+  conversationId: string,
+): Promise<'active' | 'archived' | 'completed' | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('conversations')
+    .select('status')
+    .eq('id', conversationId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[chat] fetchConversationStatus', error)
+    return null
+  }
+
+  return (data?.status as 'active' | 'archived' | 'completed') ?? null
+}
+
+/**
  * Opens chat with an advisor: resolves their auth user, then finds/creates the conversation.
  * Returns `{ conversationId }` or a failure reason when auth / phone / link checks fail.
  */

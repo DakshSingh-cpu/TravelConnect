@@ -31,8 +31,9 @@ export async function fetchInbox(currentUserId: string): Promise<InboxConversati
 
   const { data: conversations, error: convError } = await supabase
     .from('conversations')
-    .select('id, updated_at')
+    .select('id, updated_at, status')
     .in('id', conversationIds)
+    .eq('status', 'active')
     .order('updated_at', { ascending: false })
 
   if (convError) {

@@ -38,16 +38,25 @@ export type Database = {
           created_at: string
           updated_at: string
           match_session_id: string | null
+          status: 'active' | 'archived' | 'completed'
+          first_advisor_message_at: string | null
+          traveller_replied_after_advisor: boolean | null
         }
         Insert: {
           id?: string
           created_at?: string
           updated_at?: string
           match_session_id?: string | null
+          status?: 'active' | 'archived' | 'completed'
+          first_advisor_message_at?: string | null
+          traveller_replied_after_advisor?: boolean | null
         }
         Update: {
           updated_at?: string
           match_session_id?: string | null
+          status?: 'active' | 'archived' | 'completed'
+          first_advisor_message_at?: string | null
+          traveller_replied_after_advisor?: boolean | null
         }
         Relationships: []
       }
@@ -174,6 +183,40 @@ export type Database = {
           custom_video_url?: string | null
         }
         Relationships: []
+      }
+      advisor_preferences: {
+        Row: {
+          user_id: string
+          min_readiness_score: number
+          min_budget_lakh: number
+          accept_nurture_leads: boolean
+          active_destinations: string[]
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          min_readiness_score?: number
+          min_budget_lakh?: number
+          accept_nurture_leads?: boolean
+          active_destinations?: string[]
+          updated_at?: string
+        }
+        Update: {
+          min_readiness_score?: number
+          min_budget_lakh?: number
+          accept_nurture_leads?: boolean
+          active_destinations?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'advisor_preferences_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       conversation_briefs: {
         Row: {

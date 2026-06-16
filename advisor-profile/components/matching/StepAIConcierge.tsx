@@ -10,7 +10,6 @@ import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import {
   getTextFromUIMessage,
   hasCompletedHandoffTool,
-  getHandoffToolOutput,
   messageHasAcceptedHandoff,
 } from '@/lib/chatMessages'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
@@ -140,7 +139,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
   const [phase, setPhase] = useState<Phase>('chat')
   const [input, setInput] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
-  const [handoffReason, setHandoffReason] = useState<string | null>(null)
+
   const [intakeBlocked, setIntakeBlocked] = useState(false)
   const [rateLimitError, setRateLimitError] = useState<string | null>(null)
   const [handoffBlockedMsg, setHandoffBlockedMsg] = useState<string | null>(null)
@@ -209,8 +208,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
       stop()
       setTransferError(null)
 
-      const toolOutput = getHandoffToolOutput(msgs)
-      setHandoffReason(toolOutput?.reason ?? null)
+
 
       setPhase('transferring')
       onTransferStarted?.()
@@ -239,7 +237,6 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
           err instanceof Error ? err.message : 'Could not prepare your brief. Please try again.',
         )
         handoffStarted.current = false
-        setHandoffReason(null)
         setPhase('chat')
       }
     },
@@ -298,9 +295,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
             Transferring to your expert…
           </h2>
           <p className="mt-3 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
-            {handoffReason
-              ? handoffReason
-              : 'Packaging your preferences and conversation into a brief for your matched advisor.'}
+            Packaging your preferences and conversation into a brief for your matched advisor.
           </p>
         </motion.div>
       </div>

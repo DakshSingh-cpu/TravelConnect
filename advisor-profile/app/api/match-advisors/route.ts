@@ -16,6 +16,7 @@ import {
   normalizeAdvisorBrief,
 } from '@/lib/guardrails/readiness'
 import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
+import { filterByAdvisorPreferences } from '@/lib/guardrails/advisorPreferenceFilter'
 
 export type { EnrichedMatchedAdvisorV2 }
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   const readinessScore = advisorBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
   const readinessTier = deriveReadinessTier(readinessScore)
 
-  if (readinessTier === 'blocked' || readinessTier === 'nurture') {
+  if (readinessTier === 'blocked') {
     console.info('[readiness-gate]', {
       route: '/api/match-advisors',
       tier: readinessTier,
@@ -91,15 +92,18 @@ export async function POST(request: Request) {
     })
 
     const enriched = enrichScoredResults(finalResults, pitchMap, intake)
+    const filtered = await filterByAdvisorPreferences(
+      enriched, readinessScore, readinessTier, intake.budgetLakh ?? 0,
+    )
 
     return NextResponse.json({
-      advisors: enriched,
+      advisors: filtered,
       intakeUsed: intake,
       briefUsed: Boolean(advisorBrief),
       rerankSource,
       readinessTier,
       readinessScore,
-      isNurtureLead: false,
+      isNurtureLead: readinessTier === 'nurture',
       lowIntentSignals: advisorBrief?.low_intent_signals ?? [],
     })
   } catch (err) {
