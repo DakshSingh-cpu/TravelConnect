@@ -1,6 +1,6 @@
 /** Shared guardrail thresholds — keep in sync with StepBudget MIN_L / MAX_L. */
-export const MIN_BUDGET_LAKH = 5
-export const MAX_BUDGET_LAKH = 50
+export const MIN_BUDGET_LAKH = 0
+export const MAX_BUDGET_LAKH = 100
 
 export const MIN_DESTINATION_LENGTH = 3
 
@@ -40,7 +40,7 @@ export const INTAKE_BLOCKED_MESSAGE_DESTINATION =
   'Please name a specific destination — a country, city, or region we can match to a specialist.'
 
 export const INTAKE_BLOCKED_MESSAGE_BUDGET =
-  'Our advisors specialise in trips from ₹5 lakh onwards. Please adjust your budget.'
+  'Please provide a valid trip budget between ₹0L and ₹100L.'
 
 export const INTAKE_BLOCKED_MESSAGE_TRAVEL_STYLE = 'Please select a travel style to continue.'
 
