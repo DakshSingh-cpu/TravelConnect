@@ -170,6 +170,12 @@ export function clearMatchSession(): void {
     sessionStorage.removeItem('tbo_match_intake')
     sessionStorage.removeItem('tbo_advisor_brief')
     sessionStorage.removeItem('pending_chat_advisor_id')
+    // Clear concierge chat history so the next user starts a fresh conversation
+    sessionStorage.removeItem('tbo_concierge_messages')
+    // Clear background telemetry (typing rhythm, session time, paste detection)
+    sessionStorage.removeItem('tbo_session_telemetry')
+    // Clear the verified ZIP code captured during phone verification
+    sessionStorage.removeItem('tbo_residential_zip')
   } catch {
     /* ignore */
   }
