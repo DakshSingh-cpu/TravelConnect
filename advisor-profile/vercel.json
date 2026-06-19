@@ -3,6 +3,22 @@
     {
       "path": "/api/cron/archive-stale-leads",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/expire-pending-leads",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/send-delayed-emails",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/retry-stuck-vetting",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/purge-vetting-audit",
+      "schedule": "0 3 * * *"
     }
   ]
 }

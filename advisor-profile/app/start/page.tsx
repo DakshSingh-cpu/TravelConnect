@@ -10,15 +10,19 @@ import StepMatching from '@/components/matching/StepMatching'
 import StepResults from '@/components/matching/StepResults'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
-import { captureAttribution, readAttribution } from '@/lib/attribution'
+import { captureAttribution } from '@/lib/attribution'
 import { persistAccountRoleIntent } from '@/lib/accountRole'
 import {
+  ensureMatchSessionSaved,
   persistMatchSession,
-  persistMatchSessionId,
   readMatchSession,
+  saveMatchSession,
 } from '@/lib/matchSession'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
 import { validateIntake } from '@/lib/intakeValidation'
+import { useSessionTelemetry } from '@/hooks/useSessionTelemetry'
+import { enterFunnelStep } from '@/lib/telemetry/collector'
+import type { FunnelStep } from '@/lib/telemetry/types'
 
 // ── Step name ↔ URL param mapping ─────────────────────────────────────────────
 // Each step gets its own URL so the Android back button navigates between
@@ -40,30 +44,6 @@ function persistIntakePartial(partial: Record<string, unknown>) {
     sessionStorage.setItem(INTAKE_SESSION_KEY, JSON.stringify({ ...current, ...partial }))
   } catch {
     /* ignore */
-  }
-}
-
-/** Fire-and-forget: save the completed session to DB for attribution analytics */
-async function saveMatchSession(
-  advisors: EnrichedMatchedAdvisor[],
-  intake: MatchIntakePayload,
-  brief?: AdvisorBrief | null,
-) {
-  try {
-    const attribution = readAttribution()
-    const res = await fetch('/api/match-sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ advisors, intake, attribution, advisorBrief: brief ?? undefined }),
-    })
-    if (!res.ok) return
-
-    const data = (await res.json()) as { ok?: boolean; matchSessionId?: string }
-    if (data.ok && data.matchSessionId) {
-      persistMatchSessionId(data.matchSessionId)
-    }
-  } catch {
-    // Non-critical — don't surface errors to the user
   }
 }
 
@@ -99,6 +79,21 @@ function StartFunnelInner() {
 
   const intakeIsValid = intakePayload ? validateIntake(intakePayload).valid : false
 
+  useSessionTelemetry()
+
+  useEffect(() => {
+    const stepMap: Record<number, FunnelStep> = {
+      0: 'destination',
+      1: 'budget',
+      2: 'style',
+      3: 'chat',
+      4: 'matching',
+      5: 'results',
+    }
+    const funnelStep = stepMap[currentStep]
+    if (funnelStep) enterFunnelStep(funnelStep)
+  }, [currentStep])
+
   // On mount: capture UTM params from ad click + set role
   useEffect(() => {
     captureAttribution()
@@ -114,6 +109,9 @@ function StartFunnelInner() {
         if (session) {
           setMatchedAdvisors(session.advisors)
           if (session.advisorBrief) setAdvisorBrief(session.advisorBrief)
+          if (!session.matchSessionId) {
+            void ensureMatchSessionSaved()
+          }
         }
       }
 

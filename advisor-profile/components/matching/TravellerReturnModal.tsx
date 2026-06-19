@@ -12,6 +12,8 @@ type Props = {
   onClose: () => void
   /** Called when the user wants to go to their previous chats */
   onGoToChat: () => void
+  /** Called when the user wants to see their previous advisor matches */
+  onGoToMatches?: () => void
   /** Called when user wants to start a completely fresh journey (no sign-in required) */
   onFreshStart: () => void
   /** Called when user has signed in fresh and should proceed */
@@ -24,6 +26,7 @@ export default function TravellerReturnModal({
   open,
   onClose,
   onGoToChat,
+  onGoToMatches,
   onFreshStart,
   onFreshSignedIn,
   initialStep = 'selection',
@@ -381,6 +384,7 @@ export default function TravellerReturnModal({
                 {/* Post Login Option 1: Open chats */}
                 <motion.button
                   type="button"
+                  id="traveller-open-chats-btn"
                   initial={reduceMotion ? false : { opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={reduceMotion ? { duration: 0 } : { delay: 0.15, duration: 0.4, ease: 'easeOut' }}
@@ -407,18 +411,65 @@ export default function TravellerReturnModal({
                 {/* Divider */}
                 <div className="flex items-center gap-3">
                   <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
-                  <span
-                    className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em]"
-                    style={{ color: 'var(--muted)' }}
-                  >
-                    or
-                  </span>
+                  <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--muted)' }}>or</span>
                   <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
                 </div>
 
-                {/* Post Login Option 2: New journey */}
+                {/* Post Login Option 2: View previous matches */}
+                {onGoToMatches && (
+                  <>
+                    <motion.button
+                      type="button"
+                      id="traveller-view-matches-btn"
+                      initial={reduceMotion ? false : { opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={reduceMotion ? { duration: 0 } : { delay: 0.2, duration: 0.4, ease: 'easeOut' }}
+                      whileHover={reduceMotion ? undefined : { y: -3, scale: 1.01 }}
+                      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+                      onClick={onGoToMatches}
+                      className="group relative flex w-full items-start gap-4 overflow-hidden rounded-2xl border p-5 text-left transition-shadow hover:shadow-[0_8px_32px_rgba(99,77,177,0.14)]"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(99,77,177,0.05) 0%, rgba(99,77,177,0.02) 100%)',
+                        borderColor: 'rgba(99,77,177,0.2)',
+                      }}
+                    >
+                      {/* Hover shimmer */}
+                      <span
+                        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                        style={{ background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%)' }}
+                        aria-hidden
+                      />
+                      <span
+                        className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl shadow-sm"
+                        style={{ background: 'linear-gradient(135deg, #634dad, #3d2d8a)', boxShadow: '0 4px 16px rgba(99,77,177,0.3)' }}
+                      >
+                        🗺️
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold leading-snug" style={{ color: 'var(--ink)' }}>View previous matches</p>
+                        <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--muted)' }}>
+                          {previousDestination
+                            ? <>See the advisors matched for your <strong style={{ color: 'var(--ink)' }}>{previousDestination}</strong> trip and connect with them.</>
+                            : 'See the advisors matched for your previous trip and connect with them.'}
+                        </p>
+                      </div>
+                      <span className="mt-1 shrink-0 text-lg opacity-40 transition-all duration-300 group-hover:translate-x-0.5 group-hover:opacity-80" style={{ color: '#634dad' }} aria-hidden>→</span>
+                      <span className="absolute bottom-0 left-0 h-0.5 w-0 rounded-full transition-all duration-500 group-hover:w-full" style={{ background: 'linear-gradient(90deg, #634dad, #9b7ff5)' }} aria-hidden />
+                    </motion.button>
+
+                    {/* Divider */}
+                    <div className="flex items-center gap-3">
+                      <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                      <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em]" style={{ color: 'var(--muted)' }}>or</span>
+                      <span className="h-px flex-1" style={{ background: 'var(--border)' }} />
+                    </div>
+                  </>
+                )}
+
+                {/* Post Login Option 3: New journey */}
                 <motion.button
                   type="button"
+                  id="traveller-new-journey-btn"
                   initial={reduceMotion ? false : { opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={reduceMotion ? { duration: 0 } : { delay: 0.25, duration: 0.4, ease: 'easeOut' }}

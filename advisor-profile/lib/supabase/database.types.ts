@@ -14,20 +14,20 @@ export type Database = {
           id: string
           full_name: string | null
           avatar_url: string | null
-          account_role: 'traveller' | 'advisor'
+          account_role: 'traveller' | 'advisor' | 'admin'
           updated_at: string
         }
         Insert: {
           id: string
           full_name?: string | null
           avatar_url?: string | null
-          account_role?: 'traveller' | 'advisor'
+          account_role?: 'traveller' | 'advisor' | 'admin'
           updated_at?: string
         }
         Update: {
           full_name?: string | null
           avatar_url?: string | null
-          account_role?: 'traveller' | 'advisor'
+          account_role?: 'traveller' | 'advisor' | 'admin'
           updated_at?: string
         }
         Relationships: []
@@ -38,6 +38,7 @@ export type Database = {
           created_at: string
           updated_at: string
           match_session_id: string | null
+          lead_assignment_id: string | null
           status: 'active' | 'archived' | 'completed'
           first_advisor_message_at: string | null
           traveller_replied_after_advisor: boolean | null
@@ -47,6 +48,7 @@ export type Database = {
           created_at?: string
           updated_at?: string
           match_session_id?: string | null
+          lead_assignment_id?: string | null
           status?: 'active' | 'archived' | 'completed'
           first_advisor_message_at?: string | null
           traveller_replied_after_advisor?: boolean | null
@@ -54,6 +56,7 @@ export type Database = {
         Update: {
           updated_at?: string
           match_session_id?: string | null
+          lead_assignment_id?: string | null
           status?: 'active' | 'archived' | 'completed'
           first_advisor_message_at?: string | null
           traveller_replied_after_advisor?: boolean | null
@@ -105,6 +108,8 @@ export type Database = {
           utm_content: string | null
           fbclid: string | null
           landed_at: string | null
+          lead_status: 'pending' | 'accepted' | 'blocked' | 'exhausted' | null
+          residential_zip: string | null
         }
         Insert: {
           id?: string
@@ -125,8 +130,11 @@ export type Database = {
           utm_content?: string | null
           fbclid?: string | null
           landed_at?: string | null
+          lead_status?: 'pending' | 'accepted' | 'exhausted' | null
         }
-        Update: Record<string, never>
+        Update: {
+          lead_status?: 'pending' | 'accepted' | 'exhausted' | null
+        }
         Relationships: []
       }
       conversation_participants: {
@@ -183,6 +191,145 @@ export type Database = {
           custom_video_url?: string | null
         }
         Relationships: []
+      }
+      lead_assignments: {
+        Row: {
+          id: string
+          match_session_id: string
+          traveller_user_id: string
+          advisor_user_id: string
+          advisor_route_id: string
+          rank: number
+          status: 'vetting' | 'approved' | 'blocked' | 'dismissed' | 'superseded' | 'pending' | 'accepted' | 'rejected' | 'expired'
+          conversation_id: string | null
+          created_at: string
+          responded_at: string | null
+          expires_at: string
+          vetting_score: number | null
+          vetting_result: Json | null
+          seon_transaction_id: string | null
+          email_sent_at: string | null
+          chat_unlocked_at: string | null
+          approved_at: string | null
+          vetting_attempts: number
+        }
+        Insert: {
+          id?: string
+          match_session_id: string
+          traveller_user_id: string
+          advisor_user_id: string
+          advisor_route_id: string
+          rank: number
+          status?: 'vetting' | 'approved' | 'blocked' | 'dismissed' | 'superseded' | 'pending' | 'accepted' | 'rejected' | 'expired'
+          conversation_id?: string | null
+          created_at?: string
+          responded_at?: string | null
+          expires_at?: string
+          vetting_score?: number | null
+          vetting_result?: Json | null
+          seon_transaction_id?: string | null
+          email_sent_at?: string | null
+          chat_unlocked_at?: string | null
+          approved_at?: string | null
+          vetting_attempts?: number
+        }
+        Update: {
+          status?: 'vetting' | 'approved' | 'blocked' | 'dismissed' | 'superseded' | 'pending' | 'accepted' | 'rejected' | 'expired'
+          conversation_id?: string | null
+          responded_at?: string | null
+          vetting_score?: number | null
+          vetting_result?: Json | null
+          seon_transaction_id?: string | null
+          email_sent_at?: string | null
+          chat_unlocked_at?: string | null
+          approved_at?: string | null
+          vetting_attempts?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lead_assignments_match_session_id_fkey'
+            columns: ['match_session_id']
+            isOneToOne: false
+            referencedRelation: 'match_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_assignments_traveller_user_id_fkey'
+            columns: ['traveller_user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lead_assignments_advisor_user_id_fkey'
+            columns: ['advisor_user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      session_telemetry: {
+        Row: {
+          id: string
+          match_session_id: string | null
+          traveller_user_id: string | null
+          payload: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          match_session_id?: string | null
+          traveller_user_id?: string | null
+          payload: Json
+          created_at?: string
+        }
+        Update: {
+          match_session_id?: string | null
+          traveller_user_id?: string | null
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'session_telemetry_match_session_id_fkey'
+            columns: ['match_session_id']
+            isOneToOne: false
+            referencedRelation: 'match_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'session_telemetry_traveller_user_id_fkey'
+            columns: ['traveller_user_id']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      seon_cache: {
+        Row: {
+          traveller_user_id: string
+          result: Json
+          expires_at: string
+        }
+        Insert: {
+          traveller_user_id: string
+          result: Json
+          expires_at: string
+        }
+        Update: {
+          result?: Json
+          expires_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'seon_cache_traveller_user_id_fkey'
+            columns: ['traveller_user_id']
+            isOneToOne: true
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
       }
       advisor_preferences: {
         Row: {
@@ -272,6 +419,10 @@ export type Database = {
       set_my_account_role: {
         Args: { p_role: 'traveller' | 'advisor' }
         Returns: string
+      }
+      is_admin: {
+        Args: { user_id: string }
+        Returns: boolean
       }
     }
     Enums: Record<string, never>

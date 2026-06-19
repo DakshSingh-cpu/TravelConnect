@@ -41,6 +41,7 @@ export function persistMatchSessionId(matchSessionId: string): void {
   if (typeof window === 'undefined') return
   try {
     sessionStorage.setItem(MATCH_SESSION_ID_STORAGE_KEY, matchSessionId)
+    localStorage.setItem(MATCH_SESSION_ID_STORAGE_KEY, matchSessionId)
   } catch {
     /* ignore */
   }
@@ -49,11 +50,69 @@ export function persistMatchSessionId(matchSessionId: string): void {
 export function readMatchSessionId(): string | null {
   if (typeof window === 'undefined') return null
   try {
-    const id = sessionStorage.getItem(MATCH_SESSION_ID_STORAGE_KEY)
-    return id && id.length > 0 ? id : null
+    const fromSession = sessionStorage.getItem(MATCH_SESSION_ID_STORAGE_KEY)
+    if (fromSession && fromSession.length > 0) return fromSession
+
+    const fromLocal = localStorage.getItem(MATCH_SESSION_ID_STORAGE_KEY)
+    if (fromLocal && fromLocal.length > 0) {
+      sessionStorage.setItem(MATCH_SESSION_ID_STORAGE_KEY, fromLocal)
+      return fromLocal
+    }
+    return null
   } catch {
     return null
   }
+}
+
+function slimAdvisorsForApi(advisors: EnrichedMatchedAdvisor[]) {
+  return advisors.map((a) => ({ id: a.id, csvAgencyId: a.csvAgencyId }))
+}
+
+/** Persist match results to DB and store the session id for lead requests. */
+export async function saveMatchSession(
+  advisors: EnrichedMatchedAdvisor[],
+  intake: MatchIntakePayload,
+  brief?: AdvisorBrief | null,
+): Promise<string | null> {
+  if (typeof window === 'undefined') return null
+
+  const existingId = readMatchSessionId()
+  if (existingId) return existingId
+
+  try {
+    const attribution = readAttribution()
+    const res = await fetch('/api/match-sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        advisors: slimAdvisorsForApi(advisors),
+        intake,
+        attribution,
+        advisorBrief: brief ?? undefined,
+      }),
+    })
+
+    const data = (await res.json()) as { ok?: boolean; matchSessionId?: string }
+    if (data.ok && data.matchSessionId) {
+      persistMatchSessionId(data.matchSessionId)
+      return data.matchSessionId
+    }
+  } catch {
+    /* lead request retries via ensureMatchSessionSaved / server fallback */
+  }
+
+  return null
+}
+
+/** Backfill DB session when results exist in sessionStorage but id was never saved. */
+export async function ensureMatchSessionSaved(): Promise<string | null> {
+  const existingId = readMatchSessionId()
+  if (existingId) return existingId
+
+  const session = readMatchSession()
+  if (!session) return null
+
+  return saveMatchSession(session.advisors, session.intake, session.advisorBrief)
 }
 
 export function readMatchSession(): MatchSessionSnapshot | null {
@@ -106,6 +165,7 @@ export function clearMatchSession(): void {
   try {
     sessionStorage.removeItem(MATCH_RESULTS_STORAGE_KEY)
     sessionStorage.removeItem(MATCH_SESSION_ID_STORAGE_KEY)
+    localStorage.removeItem(MATCH_SESSION_ID_STORAGE_KEY)
     // Also clear adjacent keys written during the flow
     sessionStorage.removeItem('tbo_match_intake')
     sessionStorage.removeItem('tbo_advisor_brief')

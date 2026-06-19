@@ -7,17 +7,22 @@ import {
   verifyPhoneOtp,
   PhoneValidationError,
 } from '@/lib/phoneVerification'
+import { requestResidentialZipFromLocation } from '@/lib/geo/residentialZipFromLocation'
+import { persistResidentialZip } from '@/lib/telemetry/collector'
 
 type Props = {
   onVerified: () => void
   onDismiss: () => void
 }
 
+type Stage = 'phone' | 'otp'
+
 export default function PhoneVerificationModal({ onVerified, onDismiss }: Props) {
   const [phone, setPhone] = useState('')
   const [otp, setOtp] = useState('')
-  const [stage, setStage] = useState<'phone' | 'otp'>('phone')
+  const [stage, setStage] = useState<Stage>('phone')
   const [loading, setLoading] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
 
@@ -29,6 +34,19 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
 
   const phoneDigits = phone.replace(/\D/g, '')
   const canSend = phoneDigits.length >= 10
+
+  async function resolveLocationAndFinish() {
+    setLocating(true)
+    setError(null)
+
+    const result = await requestResidentialZipFromLocation()
+    if (result.ok) {
+      persistResidentialZip(result.zip)
+    }
+
+    setLocating(false)
+    onVerified()
+  }
 
   async function handleSendOtp() {
     setLoading(true)
@@ -60,7 +78,7 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
         setError(verifyError ?? 'Invalid code. Please try again.')
         return
       }
-      onVerified()
+      await resolveLocationAndFinish()
     } catch {
       setError('Verification failed. Please try again.')
     } finally {
@@ -79,7 +97,9 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
         type="button"
         className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm"
         aria-label="Close"
-        onClick={onDismiss}
+        onClick={() => {
+          if (!locating) onDismiss()
+        }}
       />
 
       <div
@@ -97,8 +117,7 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
           Verify your number
         </h2>
         <p className="mt-1 text-sm" style={{ color: 'var(--muted)' }}>
-          A quick verification ensures advisors receive genuine leads. Your number
-          is never shared.
+          A quick verification ensures advisors receive genuine leads. Your number is never shared.
         </p>
 
         {stage === 'phone' ? (
@@ -128,7 +147,7 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
               {loading ? 'Sending\u2026' : 'Send verification code'}
             </button>
           </div>
-        ) : (
+        ) : stage === 'otp' ? (
           <div className="mt-5 space-y-3">
             <p className="text-sm" style={{ color: 'var(--muted)' }}>
               Enter the 6-digit code sent to {phone}
@@ -152,11 +171,11 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
             <button
               type="button"
               onClick={() => void handleVerifyOtp()}
-              disabled={loading || otp.length !== 6}
+              disabled={loading || locating || otp.length !== 6}
               className="w-full rounded-xl py-3 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
             >
-              {loading ? 'Verifying\u2026' : 'Confirm and connect'}
+              {locating ? 'Detecting location\u2026' : loading ? 'Verifying\u2026' : 'Continue'}
             </button>
             <button
               type="button"
@@ -171,7 +190,7 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
               Change number
             </button>
           </div>
-        )}
+        ) : null}
 
         {error && (
           <p className="mt-3 text-sm" style={{ color: '#b91c1c' }}>
@@ -179,14 +198,16 @@ export default function PhoneVerificationModal({ onVerified, onDismiss }: Props)
           </p>
         )}
 
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="mt-4 w-full text-sm"
-          style={{ color: 'var(--muted)' }}
-        >
-          Not now
-        </button>
+        {!locating && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="mt-4 w-full text-sm"
+            style={{ color: 'var(--muted)' }}
+          >
+            Not now
+          </button>
+        )}
       </div>
     </div>
   )

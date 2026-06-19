@@ -13,6 +13,12 @@ import {
   messageHasAcceptedHandoff,
 } from '@/lib/chatMessages'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
+import {
+  flushConciergeTurn,
+  recordConciergeKeydown,
+  recordConciergePaste,
+  recordConciergeUserTurn,
+} from '@/lib/telemetry/collector'
 
 export const CHAT_MESSAGES_KEY = 'tbo_concierge_messages'
 
@@ -259,6 +265,8 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
     const trimmed = text.trim()
     if (!trimmed || isBusy || isTransferring) return
     setHandoffBlockedMsg(null)
+    flushConciergeTurn()
+    recordConciergeUserTurn()
     sendMessage({ text: trimmed })
     setInput('')
     inputRef.current?.focus()
@@ -567,7 +575,11 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleInputKeyDown}
+              onKeyDown={(e) => {
+                recordConciergeKeydown()
+                handleInputKeyDown(e)
+              }}
+              onPaste={() => recordConciergePaste()}
               disabled={isBusy}
               placeholder="Ask about routes, vibe, budget fit…"
               className="max-h-32 min-h-[2.5rem] min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm leading-relaxed outline-none"

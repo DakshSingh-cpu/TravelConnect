@@ -3,12 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import type { Attribution } from '@/lib/attribution'
 import type { MatchIntakePayload, EnrichedMatchedAdvisor } from '@/lib/matchAdvisors'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
-import { parseAdvisorBrief } from '@/lib/advisorBrief'
 import { notifyMatchedAdvisors } from '@/lib/push/notifyMatchedAdvisors'
 import { requireValidIntake } from '@/lib/guardrails/intakeGate'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
-import { deriveReadinessTier, normalizeAdvisorBrief } from '@/lib/guardrails/readiness'
-import { DEFAULT_READINESS_SCORE, DEFAULT_READINESS_TIER } from '@/lib/guardrails/constants'
+import { insertMatchSession } from '@/lib/matchSessions/insertSession'
 
 // Use service-role key so anonymous clients can insert without a Supabase session
 const supabaseAdmin = createClient(
@@ -52,62 +50,28 @@ export async function POST(request: Request) {
   }
   const validatedIntake: MatchIntakePayload = intakeResult.intake
 
-  const parsedBrief = rawBrief ? parseAdvisorBrief(rawBrief) : null
-  const normalizedBrief = parsedBrief
-    ? normalizeAdvisorBrief(parsedBrief, validatedIntake)
-    : null
-
-  const readinessScore = normalizedBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
-  const readinessTier = normalizedBrief
-    ? deriveReadinessTier(normalizedBrief.readiness_score)
-    : DEFAULT_READINESS_TIER
-  const lowIntentSignals = normalizedBrief?.low_intent_signals ?? []
-
-  // Extract the numeric CSV agency IDs from the matched advisors
   const advisorIds = advisors
     .map((a) => a.csvAgencyId)
     .filter((id): id is number => typeof id === 'number' && id > 0)
 
-  const row = {
-    destination: validatedIntake.destination,
-    budget_lakh: validatedIntake.budgetLakh,
-    travel_style: validatedIntake.travelStyle,
-    vibe: validatedIntake.vibe,
-    pace: validatedIntake.pace,
-    timing: validatedIntake.timing,
-    duration: validatedIntake.duration,
-    advisor_ids: advisorIds.length > 0 ? advisorIds : null,
-    readiness_score: readinessScore,
-    readiness_tier: readinessTier,
-    low_intent_signals: lowIntentSignals,
-    utm_source: attribution?.utm_source ?? null,
-    utm_medium: attribution?.utm_medium ?? null,
-    utm_campaign: attribution?.utm_campaign ?? null,
-    utm_content: attribution?.utm_content ?? null,
-    fbclid: attribution?.fbclid ?? null,
-    landed_at: attribution?.landed_at ? new Date(attribution.landed_at) : null,
+  const created = await insertMatchSession(supabaseAdmin, {
+    intake: validatedIntake,
+    advisorIds,
+    advisorBrief: rawBrief,
+    attribution,
+  })
+
+  if (!created) {
+    return NextResponse.json({ ok: false, error: 'Could not save match session' }, { status: 200 })
   }
 
-  const { data: inserted, error } = await supabaseAdmin
-    .from('match_sessions')
-    .insert(row)
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('[match-sessions] Insert error:', error.message)
-    return NextResponse.json({ ok: false, error: error.message }, { status: 200 })
-  }
-
-  const matchSessionId = inserted.id
-
-  if (readinessTier !== 'blocked' && advisorIds.length > 0) {
+  if (created.readinessTier !== 'blocked' && advisorIds.length > 0) {
     void notifyMatchedAdvisors({
-      matchSessionId,
+      matchSessionId: created.id,
       advisorAgencyIds: advisorIds,
-      destination: row.destination,
+      destination: validatedIntake.destination,
     })
   }
 
-  return NextResponse.json({ ok: true, matchSessionId })
+  return NextResponse.json({ ok: true, matchSessionId: created.id })
 }

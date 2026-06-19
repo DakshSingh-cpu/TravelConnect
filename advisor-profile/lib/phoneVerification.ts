@@ -104,6 +104,8 @@ export async function sendPhoneOtp(
   const normalized = normalizePhoneE164(phone)
   const supabase = createClient()
 
+  // Test numbers configured in Supabase Auth → Phone skip real SMS but still
+  // require updateUser so verifyOtp(type: phone_change) has a pending change.
   const { error } = await supabase.auth.updateUser({ phone: normalized })
 
   return { error: error?.message ?? null }
@@ -130,6 +132,11 @@ export async function verifyPhoneOtp(
 
   if (error) {
     return { success: false, error: error.message }
+  }
+
+  const { error: refreshError } = await supabase.auth.refreshSession()
+  if (refreshError) {
+    return { success: false, error: refreshError.message }
   }
 
   return { success: true, error: null }

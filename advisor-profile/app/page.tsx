@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { readMatchSession, persistMatchSession, MATCH_RESULTS_VIEW } from '@/lib/matchSession'
+import {
+  ensureMatchSessionSaved,
+  persistMatchSession,
+  readMatchSession,
+  saveMatchSession,
+  MATCH_RESULTS_VIEW,
+} from '@/lib/matchSession'
 import StepDestination from '@/components/matching/StepDestination'
 import TravellerReturnModal from '@/components/matching/TravellerReturnModal'
 import StepPreferences from '@/components/matching/StepPreferences'
@@ -22,6 +28,9 @@ import {
   persistAccountRoleIntent,
   setMyAccountRole,
 } from '@/lib/accountRole'
+import { useSessionTelemetry } from '@/hooks/useSessionTelemetry'
+import { enterFunnelStep } from '@/lib/telemetry/collector'
+import type { FunnelStep } from '@/lib/telemetry/types'
 
 export default function MatchingIntakePage() {
   const router = useRouter()
@@ -52,6 +61,20 @@ export default function MatchingIntakePage() {
 
   const intakeIsValid = intakePayload ? validateIntake(intakePayload).valid : false
 
+  useSessionTelemetry()
+
+  useEffect(() => {
+    const stepMap: Record<number, FunnelStep | null> = {
+      0: 'destination',
+      1: 'budget',
+      2: 'chat',
+      3: 'matching',
+      4: 'results',
+    }
+    const funnelStep = stepMap[currentStep]
+    if (funnelStep) enterFunnelStep(funnelStep)
+  }, [currentStep])
+
   const handleConciergeHandoff = useCallback((brief: AdvisorBrief) => {
     setAdvisorBrief(brief)
     persistAdvisorBrief(brief)
@@ -65,6 +88,7 @@ export default function MatchingIntakePage() {
       setCurrentStep(4)
       if (intakePayload) {
         persistMatchSession(advisors, intakePayload, advisorBrief)
+        void saveMatchSession(advisors, intakePayload, advisorBrief)
       }
       // Matching fully succeeded — safe to clear the concierge chat history now
       try { sessionStorage.removeItem(CONCIERGE_MESSAGES_KEY) } catch { /* ignore */ }
@@ -150,6 +174,9 @@ export default function MatchingIntakePage() {
     setDuration(intake.duration)
     if (brief) setAdvisorBrief(brief)
     setCurrentStep(4)
+    if (!session.matchSessionId) {
+      void ensureMatchSessionSaved()
+    }
   }, [])
 
   return (
@@ -186,6 +213,23 @@ export default function MatchingIntakePage() {
           setTravellerReturnOpen(false)
           router.push('/chat')
         }}
+        onGoToMatches={(() => {
+          const session = readMatchSession()
+          if (!session?.advisors?.length) return undefined
+          return () => {
+            setMatchedAdvisors(session.advisors)
+            setDestination(session.intake.destination)
+            setBudgetLakh(session.intake.budgetLakh)
+            setTravelStyle(session.intake.travelStyle)
+            setVibe(session.intake.vibe)
+            setPace(session.intake.pace)
+            setTiming(session.intake.timing)
+            setDuration(session.intake.duration)
+            if (session.advisorBrief) setAdvisorBrief(session.advisorBrief)
+            setTravellerReturnOpen(false)
+            setCurrentStep(4)
+          }
+        })()}
         onFreshStart={() => void proceedAsTraveller()}
         onFreshSignedIn={() => void proceedAsTraveller()}
       />

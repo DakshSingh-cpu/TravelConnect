@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-export type RateLimitBucket = 'chat' | 'synthesize-brief' | 'match-advisors' | 'match-sessions'
+export type RateLimitBucket = 'chat' | 'synthesize-brief' | 'match-advisors' | 'match-sessions' | 'leads-request' | 'leads-respond' | 'admin-override'
 
 const BUCKET_LIMITS: Record<RateLimitBucket, { requests: number; window: `${number} s` | `${number} m` }> = {
   chat: { requests: 15, window: '1 m' },
   'synthesize-brief': { requests: 8, window: '1 m' },
   'match-advisors': { requests: 30, window: '1 m' },
   'match-sessions': { requests: 10, window: '1 m' },
+  'leads-request': { requests: 10, window: '1 m' },
+  'leads-respond': { requests: 20, window: '1 m' },
+  'admin-override': { requests: 10, window: '1 m' },
 }
 
 let warnedMissingEnv = false

@@ -1,13 +1,13 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import AuthModal from '@/components/auth/AuthModal'
 import PhoneVerificationModal from '@/components/matching/PhoneVerificationModal'
-import { openChatWithAdvisor } from '@/lib/chat/conversations'
-import { readMatchSessionId } from '@/lib/matchSession'
+import LeadSubmittedScreen from '@/components/matching/LeadSubmittedScreen'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { isPhoneVerifiedFromUser } from '@/lib/phoneVerification'
+import { requestLeadAssignment } from '@/lib/leads/requestLead'
+import { ensureMyProfile } from '@/lib/chat/ensureProfile'
 
 type Props = {
   advisorRouteId: string
@@ -17,8 +17,8 @@ type Props = {
 }
 
 /**
- * Drop-in handler for "Chat with [Name]" buttons.
- * Gate order: auth -> phone OTP -> chat creation.
+ * Gate order: auth -> phone OTP + browser location -> background lead vetting request.
+ * Traveller always sees wait-for-email screen (no auto-redirect).
  */
 export default function ChatEntryButton({
   advisorRouteId,
@@ -26,10 +26,10 @@ export default function ChatEntryButton({
   className,
   style,
 }: Props) {
-  const router = useRouter()
   const { session, loading, refresh } = useSupabaseSession()
   const [authOpen, setAuthOpen] = useState(false)
   const [phoneModalOpen, setPhoneModalOpen] = useState(false)
+  const [showWaitScreen, setShowWaitScreen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const resumeAfterAuth = useRef(false)
@@ -37,44 +37,68 @@ export default function ChatEntryButton({
 
   const firstName = advisorDisplayName.split(' ')[0]
 
-  async function startChat() {
+  async function submitLeadRequest() {
     setError(null)
     setBusy(true)
 
     try {
-      const result = await openChatWithAdvisor(advisorRouteId, readMatchSessionId())
+      if (!session) {
+        resumeAfterAuth.current = true
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('pending_chat_advisor_id', advisorRouteId)
+        }
+        setAuthOpen(true)
+        return
+      }
+
+      if (!isPhoneVerifiedFromUser(session.user)) {
+        resumeAfterPhone.current = true
+        setPhoneModalOpen(true)
+        return
+      }
+
+      await ensureMyProfile()
+
+      const result = await requestLeadAssignment(advisorRouteId)
 
       if (!result.ok) {
-        if (result.reason === 'not_authenticated') {
+        if (result.code === 'NOT_AUTHENTICATED') {
           resumeAfterAuth.current = true
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem('pending_chat_advisor_id', advisorRouteId)
-          }
           setAuthOpen(true)
           return
         }
-        if (result.reason === 'phone_not_verified') {
+        if (result.code === 'PHONE_NOT_VERIFIED') {
           resumeAfterPhone.current = true
           setPhoneModalOpen(true)
           return
         }
-        if (result.reason === 'advisor_not_linked') {
+        if (result.code === 'ADVISOR_NOT_LINKED') {
           alert('This advisor has not set up their messaging inbox yet.')
           setBusy(false)
           return
         }
+        if (result.code === 'MATCH_SESSION_REQUIRED') {
+          setError('Your match session expired. Please run matching again.')
+          setBusy(false)
+          return
+        }
+        setError(result.error)
+        return
       }
 
       resumeAfterAuth.current = false
       resumeAfterPhone.current = false
-      if (result.briefSaveFailed) {
-        setError(
-          'Chat opened, but your trip brief could not be saved for the advisor. Open chat from match results again or reload this thread.',
-        )
+
+      if (result.status === 'vetting' || result.status === 'pending') {
+        setShowWaitScreen(true)
+        return
       }
-      router.push(`/chat/${result.conversationId}`)
+
+      if (result.status === 'accepted') {
+        setShowWaitScreen(true)
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open chat')
+      setError(err instanceof Error ? err.message : 'Could not submit request')
     } finally {
       setBusy(false)
     }
@@ -91,8 +115,8 @@ export default function ChatEntryButton({
       return
     }
 
-    void startChat()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only resume when session appears
+    void submitLeadRequest()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, loading])
 
   useEffect(() => {
@@ -100,7 +124,7 @@ export default function ChatEntryButton({
     const pending = sessionStorage.getItem('pending_chat_advisor_id')
     if (pending === advisorRouteId) {
       sessionStorage.removeItem('pending_chat_advisor_id')
-      void startChat()
+      void submitLeadRequest()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, loading, advisorRouteId])
@@ -110,8 +134,12 @@ export default function ChatEntryButton({
     await refresh()
     if (resumeAfterPhone.current) {
       resumeAfterPhone.current = false
-      void startChat()
+      void submitLeadRequest()
     }
+  }
+
+  if (showWaitScreen) {
+    return <LeadSubmittedScreen onDismiss={() => setShowWaitScreen(false)} />
   }
 
   return (
@@ -119,7 +147,7 @@ export default function ChatEntryButton({
       <button
         type="button"
         disabled={loading || busy}
-        onClick={() => void startChat()}
+        onClick={() => void submitLeadRequest()}
         className={
           className ??
           'w-full rounded-xl py-3 text-sm font-semibold text-white shadow-md transition-transform active:scale-[0.98] hover:opacity-95 disabled:opacity-60'
@@ -128,7 +156,7 @@ export default function ChatEntryButton({
           style ?? { background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }
         }
       >
-        {busy ? 'Opening chat\u2026' : `Chat with ${firstName} \u2192`}
+        {busy ? 'Sending request\u2026' : `Chat with ${firstName} \u2192`}
       </button>
 
       {error && (
@@ -149,7 +177,7 @@ export default function ChatEntryButton({
         }}
         accountRole="traveller"
         title={`Chat with ${firstName}`}
-        subtitle="Sign in to send a message to your advisor."
+        subtitle="Sign in to send a request to your advisor."
       />
 
       {phoneModalOpen && (
