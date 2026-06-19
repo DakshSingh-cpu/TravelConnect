@@ -19,6 +19,7 @@ import {
   recordConciergePaste,
   recordConciergeUserTurn,
 } from '@/lib/telemetry/collector'
+import IntentScoreDebugPanel from '@/components/dev/IntentScoreDebugPanel'
 
 export const CHAT_MESSAGES_KEY = 'tbo_concierge_messages'
 
@@ -601,6 +602,11 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
           </p>
         </form>
       </motion.div>
+
+      {/* Debug overlay — only visible in dev or with ?debug=1 in the URL */}
+      <IntentScoreDebugPanel
+        userTurns={messages.filter((m) => m.role === 'user').length}
+      />
     </motion.div>
   )
 }
