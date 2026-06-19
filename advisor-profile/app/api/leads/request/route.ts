@@ -164,6 +164,15 @@ async function findExistingAssignment(
         conversationId: row.conversation_id,
       })
     }
+    // Any terminal status (blocked/dismissed/superseded):
+    // return a response so we never attempt a duplicate insert.
+    if (row.status === 'blocked' || row.status === 'dismissed' || row.status === 'superseded') {
+      return NextResponse.json(
+        { ok: false, error: 'This request could not be completed at this time.', code: 'LEAD_BLOCKED' },
+        { status: 403 },
+      )
+    }
+    // vetting or any other active status
     return NextResponse.json({ ok: true, assignmentId: row.id, status: 'vetting' as const })
   }
 
@@ -185,6 +194,13 @@ async function findExistingAssignment(
       expiresAt: row.expires_at,
     })
   }
+  // Terminal statuses in legacy path — return blocked so no re-insert is attempted
+  if (row.status === 'blocked' || row.status === 'dismissed' || row.status === 'superseded') {
+    return NextResponse.json(
+      { ok: false, error: 'This request could not be completed at this time.', code: 'LEAD_BLOCKED' },
+      { status: 403 },
+    )
+  }
 
   return null
 }
@@ -198,6 +214,26 @@ async function handleVettingRequest(
   rawBrief?: unknown,
 ) {
   const rank = await computeRank(advisorRouteId, matchSessionId)
+
+  // Guard: the partial unique index allows only one 'vetting' row per match_session.
+  // Check by match_session_id alone (any advisor_route_id) to prevent a 500 on conflict.
+  if (matchSessionId) {
+    const { data: existingVetting } = await supabaseAdmin
+      .from('lead_assignments')
+      .select('id, advisor_route_id, status')
+      .eq('match_session_id', matchSessionId)
+      .eq('status', 'vetting')
+      .maybeSingle()
+
+    if (existingVetting) {
+      // Already vetting — return the existing assignment instead of inserting
+      return NextResponse.json({
+        ok: true,
+        assignmentId: existingVetting.id,
+        status: 'vetting' as const,
+      })
+    }
+  }
 
   if (matchSessionId) {
     await supabaseAdmin

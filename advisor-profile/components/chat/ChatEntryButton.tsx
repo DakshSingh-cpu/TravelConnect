@@ -34,6 +34,9 @@ export default function ChatEntryButton({
   const [error, setError] = useState<string | null>(null)
   const resumeAfterAuth = useRef(false)
   const resumeAfterPhone = useRef(false)
+  // Set to true right after OTP verification so the stale session.user check is
+  // bypassed for the single immediate re-invocation of submitLeadRequest().
+  const phoneJustVerified = useRef(false)
 
   const firstName = advisorDisplayName.split(' ')[0]
 
@@ -51,7 +54,12 @@ export default function ChatEntryButton({
         return
       }
 
-      if (!isPhoneVerifiedFromUser(session.user)) {
+      // Skip the phone check if we *just* verified — the React session state may
+      // not have propagated yet even though Supabase has confirmed the phone.
+      const skipPhoneCheck = phoneJustVerified.current
+      phoneJustVerified.current = false
+
+      if (!skipPhoneCheck && !isPhoneVerifiedFromUser(session.user)) {
         resumeAfterPhone.current = true
         setPhoneModalOpen(true)
         return
@@ -79,6 +87,11 @@ export default function ChatEntryButton({
         }
         if (result.code === 'MATCH_SESSION_REQUIRED') {
           setError('Your match session expired. Please run matching again.')
+          setBusy(false)
+          return
+        }
+        if (result.code === 'LEAD_BLOCKED') {
+          setError('We were unable to process this request. Please try a different advisor or start a new search.')
           setBusy(false)
           return
         }
@@ -134,6 +147,9 @@ export default function ChatEntryButton({
     await refresh()
     if (resumeAfterPhone.current) {
       resumeAfterPhone.current = false
+      // Mark that the phone was just verified so submitLeadRequest skips the
+      // stale session.user.phone check (the React state update is async).
+      phoneJustVerified.current = true
       void submitLeadRequest()
     }
   }
