@@ -258,7 +258,7 @@ async function handleVettingRequest(
 
   if (error || !inserted) {
     console.error('[leads/request] Insert error:', error?.message)
-    return NextResponse.json({ ok: false, error: 'Could not create lead request' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'Could not create lead request: ' + (error?.message || 'unknown') }, { status: 500 })
   }
 
   const brief = rawBrief ? parseAdvisorBrief(rawBrief) : null

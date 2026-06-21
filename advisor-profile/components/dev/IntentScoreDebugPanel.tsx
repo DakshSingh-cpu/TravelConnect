@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { readSessionTelemetry } from '@/lib/telemetry/collector'
 import type { SessionTelemetryPayload } from '@/lib/telemetry/types'
+import type { UIMessage } from 'ai'
+import { getTextFromUIMessage } from '@/lib/chatMessages'
 
 // ─── Lightweight client-side score estimator (mirrors scoreLead.ts logic) ────
 // This is for testing/debug only. The real score is computed server-side.
@@ -14,7 +16,68 @@ type RuleResult = {
   status: 'good' | 'warn' | 'block' | 'neutral'
 }
 
-function computeDebugScore(t: SessionTelemetryPayload, userTurns: number): {
+const TRAVEL_DATE_PATTERNS = [
+  // Named months: January, Feb, march…
+  /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+  /\b(jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\b/i,
+  // Full date formats only (must include year): 12/25/2025, 5-7-2026
+  /\b\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}\b/,
+  // Standalone 4-digit year
+  /\b20[2-9]\d\b/,
+  // Relative time: next month, this summer, next year…
+  /\b(next|this)\s+(month|week|year|summer|winter|spring|autumn|fall)\b/i,
+  // Quarter references
+  /\b(q[1-4]|quarter)\b/i,
+  // "in 2026", "around July 2026", "for March"
+  /\b(around|in|for)\s+(\w+\s+)?\d{4}\b/i,
+  // "early March", "mid-December", "late summer"
+  /\b(early|mid|late)[- ]?(january|february|march|april|may|june|july|august|september|october|november|december|summer|winter|spring|autumn|fall|year)\b/i,
+  // Explicit date phrases
+  /\bfixed dates?\b/i,
+  /\bmy dates\b/i,
+  /\btravel(?:ling|ing)?\s+(in|on|around|during)\b/i,
+  // Flexible explicitly stated
+  /\b(dates? are flexible|flexible dates?|open dates?)\b/i,
+]
+
+const BOOKING_INTENT_PATTERNS = [
+  // Strong booking signals
+  /\b(ready to book|want to book|looking to book|planning to book|let'?s book)\b/i,
+  // Requesting pricing or quotes
+  /\b(price|pricing|cost|quote|how much|what(?:'s| is) the (price|cost|rate))\b/i,
+  // Requesting availability
+  /\bavailability\b/i,
+  // Explicitly requesting a human
+  /\b(connect|speak|talk|chat)\s+(to|with)\s+(a|an|your)\s+(human|advisor|expert|agent|person)\b/i,
+  // Confirmation readiness
+  /\b(let'?s (do|go|proceed)|i'?m ready|ready to (proceed|confirm|go ahead))\b/i,
+  // Reserve/confirm in travel context
+  /\b(reserve|confirm)\s+(a |the |my )?(trip|hotel|booking|flight|package)\b/i,
+]
+
+const DEFLECTION_PATTERNS = [
+  /\b(not sure|i don'?t know|maybe|just (looking|exploring|browsing|dreaming)|tbd|someday|just checking)\b/i,
+  /\b(no idea|haven'?t decided|undecided|not (yet|really))\b/i,
+]
+
+function analyzeConversation(messages: UIMessage[]): {
+  hasTravelDates: boolean
+  hasBookingIntent: boolean
+  hasDeflections: boolean
+} {
+  const userMessages = messages
+    .filter((m) => m.role === 'user')
+    .map((m) => getTextFromUIMessage(m).toLowerCase())
+  const combined = userMessages.join(' ')
+
+  const hasTravelDates = TRAVEL_DATE_PATTERNS.some((re) => re.test(combined))
+  const hasBookingIntent = BOOKING_INTENT_PATTERNS.some((re) => re.test(combined))
+  const hasDeflections = DEFLECTION_PATTERNS.some((re) => re.test(combined))
+
+  return { hasTravelDates, hasBookingIntent, hasDeflections }
+}
+
+function computeDebugScore(t: SessionTelemetryPayload, userTurns: number, messages: UIMessage[]): {
   score: number
   rules: RuleResult[]
   decision: 'pass' | 'block'
@@ -69,6 +132,32 @@ function computeDebugScore(t: SessionTelemetryPayload, userTurns: number): {
     rules.push({ label: `Chat turns: ${userTurns} ✓`, delta: 0, hardBlock: false, status: 'good' })
   }
 
+  // TRAVEL DATES — key required signal
+  if (messages.length > 0) {
+    const { hasTravelDates, hasBookingIntent, hasDeflections } = analyzeConversation(messages)
+
+    if (hasTravelDates) {
+      rules.push({ label: 'Travel dates mentioned ✓', delta: 10, hardBlock: false, status: 'good' })
+      base += 10
+    } else {
+      rules.push({ label: 'Travel dates: not yet mentioned', delta: -10, hardBlock: false, status: 'warn' })
+      base -= 10
+    }
+
+    if (hasBookingIntent) {
+      rules.push({ label: 'Booking intent detected ✓', delta: 10, hardBlock: false, status: 'good' })
+      base += 10
+    } else {
+      rules.push({ label: 'Booking intent: not yet expressed', delta: -5, hardBlock: false, status: 'warn' })
+      base -= 5
+    }
+
+    if (hasDeflections) {
+      rules.push({ label: 'Deflection phrases detected ("not sure", "just looking"…)', delta: -15, hardBlock: false, status: 'block' })
+      base -= 15
+    }
+  }
+
   // SESSION DURATION
   const mins = t.totalFunnelMs / 60_000
   if (mins < 0.5) {
@@ -88,6 +177,7 @@ function computeDebugScore(t: SessionTelemetryPayload, userTurns: number): {
 
 type Props = {
   userTurns: number
+  messages?: UIMessage[]
 }
 
 const STATUS_COLORS = {
@@ -97,7 +187,7 @@ const STATUS_COLORS = {
   neutral: { bg: '#f3f4f6', text: '#374151', dot: '#9ca3af' },
 }
 
-export default function IntentScoreDebugPanel({ userTurns }: Props) {
+export default function IntentScoreDebugPanel({ userTurns, messages = [] }: Props) {
   const [telemetry, setTelemetry] = useState<SessionTelemetryPayload | null>(null)
   const [isOpen, setIsOpen] = useState(true)
   const [isVisible, setIsVisible] = useState(false)
@@ -121,7 +211,7 @@ export default function IntentScoreDebugPanel({ userTurns }: Props) {
 
   if (!isVisible || !telemetry) return null
 
-  const { score, rules, decision } = computeDebugScore(telemetry, userTurns)
+  const { score, rules, decision } = computeDebugScore(telemetry, userTurns, messages)
 
   const scoreColor =
     decision === 'block'

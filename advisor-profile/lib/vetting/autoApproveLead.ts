@@ -1,28 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Json } from '@/lib/supabase/database.types'
+import { findOrCreateDirectConversationAdmin } from '@/lib/chat/findOrCreateDirectConversationAdmin'
 import { sendExpoPushNotifications } from '@/lib/push/expoPush'
-
-export async function createConversationAdmin(
-  admin: SupabaseClient,
-  advisorUserId: string,
-  travellerUserId: string,
-): Promise<string | null> {
-  const { data: conv, error } = await admin
-    .from('conversations')
-    .insert({})
-    .select('id')
-    .single()
-
-  if (error || !conv) return null
-
-  const { error: partError } = await admin.from('conversation_participants').insert([
-    { conversation_id: conv.id, user_id: advisorUserId },
-    { conversation_id: conv.id, user_id: travellerUserId },
-  ])
-
-  if (partError) return null
-  return conv.id
-}
 
 export async function autoApproveLead(
   supabaseAdmin: SupabaseClient,
@@ -38,10 +17,10 @@ export async function autoApproveLead(
 ): Promise<{ conversationId: string } | null> {
   const now = new Date().toISOString()
 
-  let conversationId = await tryExistingConversation(supabaseAdmin, assignment)
+  let conversationId = assignment.conversation_id ?? null
 
   if (!conversationId) {
-    conversationId = await createConversationAdmin(
+    conversationId = await findOrCreateDirectConversationAdmin(
       supabaseAdmin,
       assignment.advisor_user_id,
       assignment.traveller_user_id,
@@ -89,13 +68,6 @@ export async function autoApproveLead(
   void notifyAdvisorApproved(supabaseAdmin, assignment.advisor_user_id, assignment.match_session_id)
 
   return { conversationId }
-}
-
-async function tryExistingConversation(
-  supabaseAdmin: SupabaseClient,
-  assignment: { conversation_id?: string | null },
-): Promise<string | null> {
-  return assignment.conversation_id ?? null
 }
 
 async function notifyAdvisorApproved(

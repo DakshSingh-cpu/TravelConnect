@@ -122,6 +122,15 @@ export async function POST(req: Request) {
       .find((m) => m.role === 'assistant')
     const summary = lastAssistant ? getTextFromUIMessage(lastAssistant) : undefined
     const brief = finalizeBrief(buildFallbackBrief(intake, summary), intake, userTurnCount, phoneVerified)
+    if (brief.readiness_tier === 'blocked') {
+      return Response.json(
+        {
+          message:
+            'Based on your chat, we need a bit more detail before connecting you with an advisor. Share your travel dates, group size, or whether you\'re ready to book — then try again.',
+        },
+        { status: 422 },
+      )
+    }
     return Response.json({ brief, source: 'fallback' as const })
   }
 
@@ -161,13 +170,34 @@ ${READINESS_SCORING_PROMPT}`,
       ? parsed.data
       : buildFallbackBrief(intake)
 
-    return Response.json({
-      brief: finalizeBrief(brief, intake, userTurnCount, phoneVerified),
-      source: 'llm' as const,
-    })
+    const finalizedBrief = finalizeBrief(brief, intake, userTurnCount, phoneVerified)
+    if (finalizedBrief.readiness_tier === 'blocked') {
+      console.info('[readiness-gate] synthesize-brief blocked handoff', {
+        score: finalizedBrief.readiness_score,
+        tier: finalizedBrief.readiness_tier,
+        signals: finalizedBrief.low_intent_signals,
+      })
+      return Response.json(
+        {
+          message:
+            'Based on your chat, we need a bit more detail before connecting you with an advisor. Share your travel dates, group size, or whether you\'re ready to book — then try again.',
+        },
+        { status: 422 },
+      )
+    }
+    return Response.json({ brief: finalizedBrief, source: 'llm' as const })
   } catch (error) {
     console.error('[synthesize-brief]', error)
     const brief = finalizeBrief(buildFallbackBrief(intake), intake, userTurnCount, phoneVerified)
+    if (brief.readiness_tier === 'blocked') {
+      return Response.json(
+        {
+          message:
+            'Based on your chat, we need a bit more detail before connecting you with an advisor. Share your travel dates, group size, or whether you\'re ready to book — then try again.',
+        },
+        { status: 422 },
+      )
+    }
     return Response.json({ brief, source: 'fallback_error' as const })
   }
 }

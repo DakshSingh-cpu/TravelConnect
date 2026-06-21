@@ -606,6 +606,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
       {/* Debug overlay — only visible in dev or with ?debug=1 in the URL */}
       <IntentScoreDebugPanel
         userTurns={messages.filter((m) => m.role === 'user').length}
+        messages={messages}
       />
     </motion.div>
   )

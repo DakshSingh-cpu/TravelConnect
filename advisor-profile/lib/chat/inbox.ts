@@ -89,7 +89,7 @@ export async function fetchInbox(currentUserId: string): Promise<InboxConversati
     }
   }
 
-  return (conversations ?? [])
+  const items = (conversations ?? [])
     .map((conv) => {
       const peer = peersByConv.get(conv.id)
       if (!peer) return null
@@ -101,4 +101,20 @@ export async function fetchInbox(currentUserId: string): Promise<InboxConversati
       }
     })
     .filter((item): item is InboxConversation => item !== null)
+
+  return dedupeInboxByPeer(items)
+}
+
+/** One sidebar row per contact — keeps the most recently active thread. */
+function dedupeInboxByPeer(items: InboxConversation[]): InboxConversation[] {
+  const byPeer = new Map<string, InboxConversation>()
+
+  for (const item of items) {
+    const existing = byPeer.get(item.peer.id)
+    if (!existing || item.updated_at > existing.updated_at) {
+      byPeer.set(item.peer.id, item)
+    }
+  }
+
+  return [...byPeer.values()].sort((a, b) => b.updated_at.localeCompare(a.updated_at))
 }

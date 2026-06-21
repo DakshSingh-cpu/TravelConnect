@@ -1,6 +1,6 @@
 /** When true, use background vetting instead of advisor double opt-in. */
 export function isLeadVettingEnabled(): boolean {
-  return process.env.LEAD_VETTING_ENABLED === 'true'
+  return process.env.LEAD_VETTING_ENABLED !== 'false'
 }
 
 export function emailDelayMinutes(): number {

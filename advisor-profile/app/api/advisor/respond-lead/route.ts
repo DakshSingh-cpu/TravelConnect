@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { findOrCreateDirectConversationAdmin } from '@/lib/chat/findOrCreateDirectConversationAdmin'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
 import { cascadeToNextAdvisor } from '@/lib/leads/cascade'
 import { notifyAdvisorOfPendingLead } from '@/lib/leads/notifyAdvisor'
@@ -99,25 +100,18 @@ async function handleAccept(
   advisorUserId: string,
   now: string,
 ) {
-  const { data: convId, error: rpcError } = await supabaseAdmin.rpc(
-    'get_or_create_direct_conversation',
-    { peer_user_id: assignment.traveller_user_id },
+  const conversationId = await findOrCreateDirectConversationAdmin(
+    supabaseAdmin,
+    advisorUserId,
+    assignment.traveller_user_id,
   )
 
-  if (rpcError) {
-    const convResult = await createConversationAdmin(
-      supabaseAdmin,
-      advisorUserId,
-      assignment.traveller_user_id,
-    )
-    if (!convResult) {
-      console.error('[respond-lead] Conversation creation failed')
-      return NextResponse.json({ ok: false, error: 'Could not create conversation' }, { status: 500 })
-    }
-    return finishAccept(assignment, convResult, now)
+  if (!conversationId) {
+    console.error('[respond-lead] Conversation creation failed')
+    return NextResponse.json({ ok: false, error: 'Could not create conversation' }, { status: 500 })
   }
 
-  return finishAccept(assignment, convId, now)
+  return finishAccept(assignment, conversationId, now)
 }
 
 async function finishAccept(
@@ -237,25 +231,4 @@ async function handleReject(
     action: 'reject' as const,
     cascadedTo: cascaded?.advisorRouteId ?? null,
   })
-}
-
-async function createConversationAdmin(
-  admin: typeof supabaseAdmin,
-  userId1: string,
-  userId2: string,
-): Promise<string | null> {
-  const { data: conv, error } = await admin
-    .from('conversations')
-    .insert({})
-    .select('id')
-    .single()
-
-  if (error || !conv) return null
-
-  await admin.from('conversation_participants').insert([
-    { conversation_id: conv.id, user_id: userId1 },
-    { conversation_id: conv.id, user_id: userId2 },
-  ])
-
-  return conv.id
 }
