@@ -288,6 +288,9 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeoResult> {
   const data = await res.json() as { countryCode?: string; countryName?: string }
   const countryCode = data.countryCode ?? ''
   const countryName = data.countryName ?? ''
+  if (!countryCode) {
+    throw new Error('Could not determine your country from coordinates.')
+  }
   return {
     countryCode,
     countryName,
@@ -306,6 +309,40 @@ function getUserPosition(): Promise<GeolocationPosition> {
   })
 }
 
+/**
+ * IP-based fallback: BigDataCloud's client-side reverse-geocode endpoint
+ * resolves the caller's IP to approximate coordinates when called without
+ * explicit lat/lng parameters.
+ */
+async function getLocationViaIp(): Promise<GeoResult> {
+  const url = 'https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en'
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`IP geolocation failed: ${res.status}`)
+  const data = await res.json() as {
+    latitude?: number
+    longitude?: number
+    countryCode?: string
+    countryName?: string
+  }
+  const lat = data.latitude
+  const lng = data.longitude
+  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error('Could not determine your location from IP address.')
+  }
+  const countryCode = data.countryCode ?? ''
+  if (!countryCode) {
+    throw new Error('Could not determine your country from IP address.')
+  }
+  const countryName = data.countryName ?? ''
+  return {
+    countryCode,
+    countryName,
+    userLanguage: resolveUserLanguage(countryCode),
+    lat,
+    lng,
+  }
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Props = {
@@ -319,25 +356,31 @@ type LocalState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'done'; advisors: (EnrichedMatchedAdvisor & { matchReasons?: MatchReason[] })[]; geoMeta: GeoResult }
+  | { status: 'done'; advisors: (EnrichedMatchedAdvisor & { matchReasons?: MatchReason[] })[]; geoMeta: GeoResult; approximate?: boolean }
 
 export default function StepResults({ advisors, intake, onBackToPreferences, isNurtureLead = false }: Props) {
   const [localState, setLocalState] = useState<LocalState>({ status: 'idle' })
 
   const handleShowLocal = useCallback(async () => {
     if (!intake) return
-    if (!('geolocation' in navigator)) {
-      setLocalState({ status: 'error', message: 'Geolocation is not supported by your browser.' })
-      return
-    }
 
     setLocalState({ status: 'loading' })
 
     try {
-      const position = await getUserPosition()
-      const { latitude, longitude } = position.coords
+      let geo: GeoResult
+      let approximate = false
 
-      const geo = await reverseGeocode(latitude, longitude)
+      // Try precise browser geolocation first
+      try {
+        if (!('geolocation' in navigator)) throw new Error('not supported')
+        const position = await getUserPosition()
+        geo = await reverseGeocode(position.coords.latitude, position.coords.longitude)
+      } catch {
+        // Browser geolocation failed (permission denied, OS location services
+        // disabled, position unavailable, etc.) — fall back to IP-based location
+        geo = await getLocationViaIp()
+        approximate = true
+      }
 
       const excludeAgencyIds = advisors
         .map((a) => a.csvAgencyId)
@@ -370,16 +413,12 @@ export default function StepResults({ advisors, intake, onBackToPreferences, isN
         return
       }
 
-      setLocalState({ status: 'done', advisors: localAdvisors, geoMeta: geo })
+      setLocalState({ status: 'done', advisors: localAdvisors, geoMeta: geo, approximate })
     } catch (err) {
-      const geoErr = err as GeolocationPositionError | Error
-      if ('code' in geoErr && geoErr.code === 1) {
-        setLocalState({ status: 'error', message: 'Location permission denied. Please allow access to find local advisors.' })
-      } else if ('code' in geoErr && geoErr.code === 3) {
-        setLocalState({ status: 'error', message: 'Location request timed out. Please try again.' })
-      } else {
-        setLocalState({ status: 'error', message: (geoErr as Error).message || 'Something went wrong. Please try again.' })
-      }
+      setLocalState({
+        status: 'error',
+        message: (err as Error).message || 'Could not determine your location. Please try again.',
+      })
     }
   }, [intake, advisors])
 
@@ -495,6 +534,7 @@ export default function StepResults({ advisors, intake, onBackToPreferences, isN
                 </h2>
                 <p className="mx-auto mt-2 max-w-lg text-sm" style={{ color: 'var(--muted)' }}>
                   Based in {localState.geoMeta.countryName} · matched for {localState.geoMeta.userLanguage}
+                  {localState.approximate && ' · approximate location'}
                 </p>
               </div>
 
