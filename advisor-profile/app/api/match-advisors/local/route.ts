@@ -15,6 +15,7 @@ import {
 } from '@/lib/guardrails/readiness'
 import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 import { filterByAdvisorPreferences } from '@/lib/guardrails/advisorPreferenceFilter'
+import { ensureTestAdvisorInResults } from '@/lib/guardrails/testAdvisor'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
 
@@ -117,8 +118,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 
+  const withTest = ensureTestAdvisorInResults(enriched, DB_PATH, localReq)
   const filtered = await filterByAdvisorPreferences(
-    enriched, readinessScore, readinessTier, localReq.budgetLakh ?? 0,
+    withTest, readinessScore, readinessTier, localReq.budgetLakh ?? 0,
   )
 
   return NextResponse.json({

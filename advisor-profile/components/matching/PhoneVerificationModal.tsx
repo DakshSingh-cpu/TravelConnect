@@ -13,12 +13,13 @@ import { persistResidentialZip } from '@/lib/telemetry/collector'
 type Props = {
   onVerified: () => void
   onDismiss: () => void
+  initialPhone?: string
 }
 
 type Stage = 'phone' | 'otp'
 
-export default function PhoneVerificationModal({ onVerified, onDismiss }: Props) {
-  const [phone, setPhone] = useState('')
+export default function PhoneVerificationModal({ onVerified, onDismiss, initialPhone }: Props) {
+  const [phone, setPhone] = useState(initialPhone ?? '')
   const [otp, setOtp] = useState('')
   const [stage, setStage] = useState<Stage>('phone')
   const [loading, setLoading] = useState(false)

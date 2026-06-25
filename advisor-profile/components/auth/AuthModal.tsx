@@ -43,6 +43,7 @@ export default function AuthModal({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [consentChecked, setConsentChecked] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -52,6 +53,10 @@ export default function AuthModal({
 
   async function handleEmailAuth(e: React.FormEvent) {
     e.preventDefault()
+    if (!consentChecked) {
+      setMessage('Please accept the email verification terms to continue.')
+      return
+    }
     setBusy(true)
     setMessage(null)
 
@@ -103,6 +108,10 @@ export default function AuthModal({
   }
 
   async function handleGoogle() {
+    if (!consentChecked) {
+      setMessage('Please accept the email verification terms to continue.')
+      return
+    }
     setBusy(true)
     setMessage(null)
     const supabase = createClient()
@@ -150,11 +159,35 @@ export default function AuthModal({
           {subtitle}
         </p>
 
+        <label className="mt-4 flex items-start gap-2 cursor-pointer select-none rounded-lg border p-3" style={{ borderColor: consentChecked ? 'var(--teal)' : 'var(--border)', background: consentChecked ? 'rgba(13,148,126,0.04)' : 'transparent' }}>
+          <input
+            type="checkbox"
+            checked={consentChecked}
+            onChange={(e) => setConsentChecked(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border accent-[var(--teal)]"
+            style={{ borderColor: 'var(--border)' }}
+          />
+          <span className="text-xs leading-snug" style={{ color: 'var(--muted)' }}>
+            I agree to the{' '}
+            <a
+              href="/privacy/email-scan"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold underline underline-offset-2"
+              style={{ color: 'var(--teal)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Email Verification &amp; Background Scan Terms
+            </a>
+            . I understand that my email will be checked for fraud-prevention purposes.
+          </span>
+        </label>
+
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !consentChecked}
           onClick={() => void handleGoogle()}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-stone-50 disabled:opacity-60"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-stone-50 disabled:opacity-60"
           style={{ borderColor: 'var(--border)', color: 'var(--ink)' }}
         >
           <GoogleIcon />
@@ -230,7 +263,7 @@ export default function AuthModal({
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !consentChecked}
             className="w-full rounded-xl py-3 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-95 disabled:opacity-60"
             style={{ background: 'linear-gradient(135deg, var(--teal), #0a5a46)' }}
           >

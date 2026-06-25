@@ -100,13 +100,13 @@ export function buildMockMatchedAdvisors(
 
   return [
     {
-      id: 'priya-rajan',
-      name: 'Priya Rajan',
-      title: 'TravelConnect Gold Advisor · Europe Specialist',
+      id: advisorIdForAgency(110381),
+      name: 'AEROTOUR MM',
+      title: 'Couples Retreats · $$$ Luxury',
       photoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&fit=crop&q=80',
-      matchScore: clampScore(94 + (budgetLakh % 3)),
-      llmContext: `Matched for your ${vibe.toLowerCase()} trip with a ${pace.toLowerCase()} pace — Priya has repeatedly planned ${travelStyle.toLowerCase()} journeys across ${dest} within ${budget}, tuned for ${timing.toLowerCase()} and roughly ${duration.toLowerCase()} on the ground. Her rail-first style and hotel pacing align with ${logisticsSummary}.${briefNote}`,
-      csvAgencyId: 92414, // Total Trip Planners — full demo metrics (repeat, cancel, b2v, avg booking)
+      matchScore: clampScore(95),
+      llmContext: `[Test advisor] AEROTOUR MM specialises in luxury ${travelStyle.toLowerCase()} trips across ${dest} within ${budget}. Known for Maldives, Thessaloniki, and Zagreb — tuned for ${logisticsSummary}.${briefNote}`,
+      csvAgencyId: 110381,
     },
     {
       id: 'elena-vogt',

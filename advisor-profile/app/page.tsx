@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -20,7 +19,7 @@ import RoleSelectionScreen from '@/components/matching/RoleSelectionScreen'
 import type { AdvisorBrief } from '@/lib/advisorBrief'
 import { persistAdvisorBrief } from '@/lib/advisorBrief'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
-import { validateIntake } from '@/lib/intakeValidation'
+import { parseAndValidateIntake, validateIntake } from '@/lib/intakeValidation'
 import AuthModal from '@/components/auth/AuthModal'
 import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import {
@@ -31,28 +30,118 @@ import {
 import { useSessionTelemetry } from '@/hooks/useSessionTelemetry'
 import { enterFunnelStep } from '@/lib/telemetry/collector'
 import type { FunnelStep } from '@/lib/telemetry/types'
+import { readOnboardingContext } from '@/lib/conciergePrompt'
+import type { OnboardingContext } from '@/lib/conciergePrompt'
+import {
+  clearConciergeHandoff,
+  clearConciergeResumePending,
+  readConciergeHandoff,
+  shouldResumeConciergeFromOnboarding,
+} from '@/lib/onboarding/resumeConcierge'
+
+type FunnelBootstrap = {
+  currentStep: number
+  destination: string | null
+  budgetLakh: number
+  travelStyle: string | null
+  vibe: string | null
+  pace: string | null
+  timing: string | null
+  duration: string | null
+  onboardingContext: OnboardingContext | null
+  intakeError: string | null
+}
+
+function bootstrapFunnelState(): FunnelBootstrap {
+  const defaults: FunnelBootstrap = {
+    currentStep: -1,
+    destination: null,
+    budgetLakh: 15,
+    travelStyle: null,
+    vibe: 'Culture',
+    pace: 'Balanced',
+    timing: 'Next 6 months',
+    duration: '1-2 weeks',
+    onboardingContext: null,
+    intakeError: null,
+  }
+
+  if (typeof window === 'undefined') return defaults
+  if (!shouldResumeConciergeFromOnboarding()) return defaults
+
+  try {
+    const handoff = readConciergeHandoff()
+    const rawIntake = handoff?.intake
+      ? JSON.stringify(handoff.intake)
+      : sessionStorage.getItem('tbo_match_intake')
+    if (!rawIntake) {
+      return {
+        ...defaults,
+        currentStep: 2,
+        intakeError: 'We could not load your trip details. Please try onboarding again.',
+      }
+    }
+
+    const parsed = parseAndValidateIntake(JSON.parse(rawIntake))
+    if (!parsed.success) {
+      return {
+        ...defaults,
+        currentStep: 2,
+        intakeError:
+          parsed.result.message ??
+          'Trip details need a quick fix before we can open the concierge.',
+      }
+    }
+
+    const intake = parsed.data
+    const context = handoff?.context ?? readOnboardingContext()
+
+    return {
+      currentStep: 2,
+      destination: intake.destination,
+      budgetLakh: intake.budgetLakh,
+      travelStyle: intake.travelStyle,
+      vibe: intake.vibe,
+      pace: intake.pace,
+      timing: intake.timing,
+      duration: intake.duration,
+      onboardingContext: context,
+      intakeError: null,
+    }
+  } catch {
+    return {
+      ...defaults,
+      currentStep: 2,
+      intakeError: 'We could not load your trip details. Please try onboarding again.',
+    }
+  }
+}
 
 export default function MatchingIntakePage() {
   const router = useRouter()
   const { user } = useSupabaseSession()
+  const [initial] = useState(() => bootstrapFunnelState())
 
   // -1 = welcome/role-selection screen, 0+ = traveller flow steps
-  const [currentStep, setCurrentStep] = useState(-1)
+  const [currentStep, setCurrentStep] = useState(initial.currentStep)
   const [advisorAuthOpen, setAdvisorAuthOpen] = useState(false)
   const [travellerReturnOpen, setTravellerReturnOpen] = useState(false)
   const [travellerReturnStep, setTravellerReturnStep] = useState<'selection' | 'post_login'>('selection')
 
-  const [destination, setDestination] = useState<string | null>(null)
-  const [budgetLakh, setBudgetLakh] = useState(15)
-  const [travelStyle, setTravelStyle] = useState<string | null>(null)
-  const [vibe, setVibe] = useState<string | null>('Culture')
-  const [pace, setPace] = useState<string | null>('Balanced')
-  const [timing, setTiming] = useState<string | null>('Next 6 months')
-  const [duration, setDuration] = useState<string | null>('1-2 weeks')
+  const [destination, setDestination] = useState<string | null>(initial.destination)
+  const [budgetLakh, setBudgetLakh] = useState(initial.budgetLakh)
+  const [travelStyle, setTravelStyle] = useState<string | null>(initial.travelStyle)
+  const [vibe, setVibe] = useState<string | null>(initial.vibe)
+  const [pace, setPace] = useState<string | null>(initial.pace)
+  const [timing, setTiming] = useState<string | null>(initial.timing)
+  const [duration, setDuration] = useState<string | null>(initial.duration)
   const [advisorBrief, setAdvisorBrief] = useState<AdvisorBrief | null>(null)
   const [matchedAdvisors, setMatchedAdvisors] = useState<EnrichedMatchedAdvisor[] | null>(null)
-  const [intakeError, setIntakeError] = useState<string | null>(null)
+  const [intakeError, setIntakeError] = useState<string | null>(initial.intakeError)
   const [isNurtureLead, setIsNurtureLead] = useState(false)
+  const [onboardingContext, setOnboardingContext] = useState<OnboardingContext | null>(
+    initial.onboardingContext,
+  )
 
   const intakePayload: MatchIntakePayload | null =
     destination && travelStyle && vibe && pace && timing && duration
@@ -78,6 +167,8 @@ export default function MatchingIntakePage() {
   const handleConciergeHandoff = useCallback((brief: AdvisorBrief) => {
     setAdvisorBrief(brief)
     persistAdvisorBrief(brief)
+    clearConciergeHandoff()
+    clearConciergeResumePending()
     setCurrentStep(3)
   }, [])
 
@@ -121,7 +212,8 @@ export default function MatchingIntakePage() {
     } else {
       persistAccountRoleIntent('traveller')
     }
-    setCurrentStep(0)
+    // Route into the 11-step onboarding wizard (replaces StepDestination + StepPreferences)
+    router.push('/onboard')
   }
 
   async function handleAdvisorClick() {
@@ -145,6 +237,13 @@ export default function MatchingIntakePage() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
+
+    // Strip the onboarding query param once we've bootstrapped from session storage.
+    if (params.get('from') === 'onboarding') {
+      const cleanUrl = new URL(window.location.href)
+      cleanUrl.searchParams.delete('from')
+      window.history.replaceState({}, '', cleanUrl.toString())
+    }
 
     // Handle OAuth callback resume for traveller flow
     if (params.get('resume_traveller') === 'true') {
@@ -314,10 +413,37 @@ export default function MatchingIntakePage() {
             )}
             <StepAIConcierge
               intake={intakePayload}
-              onBack={() => setCurrentStep(1)}
+              onBack={() => {
+                try { sessionStorage.removeItem(CONCIERGE_MESSAGES_KEY) } catch { /* ignore */ }
+                if (onboardingContext) {
+                  router.push('/onboard?step=details')
+                } else {
+                  setCurrentStep(1)
+                }
+              }}
               onHandoff={handleConciergeHandoff}
               onTransferStarted={() => setIntakeError(null)}
+              onboardingContext={onboardingContext}
             />
+          </div>
+        )}
+
+        {currentStep === 2 && (!intakePayload || !intakeIsValid) && (
+          <div className="flex min-h-[calc(100dvh-3.25rem)] flex-1 flex-col items-center justify-center px-4 py-10 sm:px-8">
+            <div className="max-w-md text-center">
+              <p className="text-sm text-red-600" role="alert">
+                {intakeError ??
+                  'We could not open the AI concierge with your trip details. Please try again.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push('/onboard?step=details')}
+                className="mt-6 rounded-xl px-6 py-3 text-sm font-semibold text-white"
+                style={{ backgroundColor: 'var(--teal, #0F6E56)' }}
+              >
+                Back to onboarding
+              </button>
+            </div>
           </div>
         )}
 
@@ -344,7 +470,7 @@ export default function MatchingIntakePage() {
               onBackToPreferences={() => {
                 setMatchedAdvisors(null)
                 setAdvisorBrief(null)
-                setCurrentStep(1)
+                router.push('/onboard?step=style-budget')
               }}
             />
           </div>

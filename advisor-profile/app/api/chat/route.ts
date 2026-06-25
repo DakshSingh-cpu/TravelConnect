@@ -1,4 +1,5 @@
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from 'ai'
+import type { OnboardingContext } from '@/lib/conciergePrompt'
 import { z } from 'zod'
 import { buildConciergeSystemPrompt } from '@/lib/conciergePrompt'
 import { getConciergeModel, getModelRotation, hasGeminiApiKey } from '@/lib/aiModel'
@@ -20,6 +21,7 @@ const CONCIERGE_MAX_OUTPUT_TOKENS = 2048
 type ChatRequestBody = {
   messages?: UIMessage[]
   intake?: unknown
+  onboardingContext?: OnboardingContext | null
 }
 
 function isRateLimitError(err: unknown): boolean {
@@ -52,6 +54,7 @@ export async function POST(req: Request) {
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : []
+  const onboardingContext = body.onboardingContext ?? null
   const intakeValidation = parseAndValidateIntake(body.intake)
   if (!intakeValidation.success) {
     console.warn('[intake-gate]', {
@@ -73,7 +76,7 @@ export async function POST(req: Request) {
   }
 
   const models = getModelRotation()
-  const systemPrompt = buildConciergeSystemPrompt(intake)
+  const systemPrompt = buildConciergeSystemPrompt(intake, onboardingContext)
   const convertedMessages = await convertToModelMessages(messages)
 
   const tools = {

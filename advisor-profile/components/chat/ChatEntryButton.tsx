@@ -8,6 +8,7 @@ import { useSupabaseSession } from '@/hooks/useSupabaseSession'
 import { isPhoneVerifiedFromUser } from '@/lib/phoneVerification'
 import { requestLeadAssignment } from '@/lib/leads/requestLead'
 import { ensureMyProfile } from '@/lib/chat/ensureProfile'
+import { readContactPhone } from '@/lib/onboarding/useOnboardingState'
 
 type Props = {
   advisorRouteId: string
@@ -204,6 +205,7 @@ export default function ChatEntryButton({
             setPhoneModalOpen(false)
             setBusy(false)
           }}
+          initialPhone={readContactPhone() ?? undefined}
         />
       )}
     </>

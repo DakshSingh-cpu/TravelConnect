@@ -14,9 +14,16 @@ import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
 
+type OnboardingContextPayload = {
+  travelDates?: { start?: string; end?: string }
+  flexibleMonths?: string[]
+  timingMode?: string
+}
+
 type SynthesizeBody = {
   messages?: UIMessage[]
   intake?: unknown
+  onboardingContext?: { payload?: OnboardingContextPayload } | null
 }
 
 function formatTranscript(messages: Array<{ role: string; content: string }>): string {
@@ -41,6 +48,38 @@ function finalizeBrief(
     phoneVerified: Boolean(phoneVerified),
   })
   return normalized
+}
+
+function buildWizardDatesSection(payload: OnboardingContextPayload | null): string {
+  if (!payload) return ''
+
+  const hasDates = payload.timingMode === 'dates' && Boolean(payload.travelDates?.start)
+  const hasFlexible = (payload.flexibleMonths ?? []).length > 0
+
+  if (!hasDates && !hasFlexible) return ''
+
+  const lines: string[] = [
+    '\n## Confirmed onboarding wizard data (treat as user-provided — DO count toward readiness)',
+  ]
+
+  if (hasDates) {
+    const start = payload.travelDates!.start!
+    const end = payload.travelDates?.end
+    lines.push(
+      `- Travel dates confirmed in onboarding form: ${start}${end ? ` → ${end}` : ''} (specific dates slot filled — score +15 for readiness)`,
+    )
+  } else if (hasFlexible) {
+    const months = (payload.flexibleMonths ?? []).join(', ')
+    lines.push(
+      `- Flexible travel months confirmed in onboarding form: ${months} (travel window slot filled — score +10 for readiness)`,
+    )
+  }
+
+  lines.push(
+    'These values were provided by the traveler via the onboarding form before the chat began. Count them as confirmed slots when scoring readiness.',
+  )
+
+  return lines.join('\n')
 }
 
 const READINESS_SCORING_PROMPT = `
@@ -103,6 +142,9 @@ export async function POST(req: Request) {
   }
   const intake: MatchIntakePayload = intakeResult.intake
 
+  const onboardingPayload = body.onboardingContext?.payload ?? null
+  const wizardDatesSection = buildWizardDatesSection(onboardingPayload)
+
   const uiMessages = Array.isArray(body.messages) ? body.messages : []
   const transcript = serializeMessagesForBrief(uiMessages)
   const userTurnCount = countUserTurns(uiMessages)
@@ -151,7 +193,7 @@ export async function POST(req: Request) {
 - Pace: ${intake.pace}
 - Timing: ${intake.timing}
 - Duration: ${intake.duration}
-
+${wizardDatesSection}
 ## Concierge conversation
 ${transcript.length > 0 ? formatTranscript(transcript) : '(No chat messages — use intake only)'}
 

@@ -13,6 +13,10 @@ import {
   messageHasAcceptedHandoff,
 } from '@/lib/chatMessages'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
+import type { OnboardingContext } from '@/lib/conciergePrompt'
+import { buildOnboardingOpeningMessage } from '@/lib/conciergePrompt'
+import { clearOnboardingContext } from '@/lib/conciergePrompt'
+import { clearConciergeResumePending } from '@/lib/onboarding/resumeConcierge'
 import {
   flushConciergeTurn,
   recordConciergeKeydown,
@@ -51,6 +55,20 @@ function clearPersistedMessages() {
   }
 }
 
+function readPersistedMessagesForIntake(intake: MatchIntakePayload): UIMessage[] {
+  const msgs = readPersistedMessages()
+  if (msgs.length === 0) return msgs
+  const firstText = msgs[0]?.parts
+    ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map((p) => p.text)
+    .join('') ?? ''
+  if (firstText.includes('**Destination:**') && !firstText.includes(intake.destination)) {
+    clearPersistedMessages()
+    return []
+  }
+  return msgs
+}
+
 const SUGGESTED_PROMPTS = [
   'Sketch a 10-day route that fits our pace',
   'What should we prioritize with this budget?',
@@ -62,6 +80,7 @@ type Props = {
   onHandoff: (brief: AdvisorBrief) => void
   onBack?: () => void
   onTransferStarted?: () => void
+  onboardingContext?: OnboardingContext | null
 }
 
 type Phase = 'chat' | 'transferring'
@@ -142,7 +161,7 @@ function TripPill({ children }: { children: React.ReactNode }) {
 
 const MIN_USER_TURNS_FOR_HANDOFF = 3
 
-export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferStarted }: Props) {
+export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferStarted, onboardingContext }: Props) {
   const [phase, setPhase] = useState<Phase>('chat')
   const [input, setInput] = useState('')
   const [transferError, setTransferError] = useState<string | null>(null)
@@ -153,14 +172,14 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
   const handoffStarted = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const initialMessages = useRef<UIMessage[]>(readPersistedMessages())
+  const initialMessages = useRef<UIMessage[]>(readPersistedMessagesForIntake(intake))
   const wasRestored = initialMessages.current.length > 0
 
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/chat',
-        body: { intake },
+        body: { intake, onboardingContext: onboardingContext ?? null },
         fetch: async (input, init) => {
           setRateLimitError(null)
           const res = await fetch(input, init)
@@ -170,7 +189,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
           return res
         },
       }),
-    [intake],
+    [intake, onboardingContext],
   )
 
   const { messages, setMessages, sendMessage, status, stop, error } = useChat({
@@ -192,8 +211,23 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
   // state (the transport-based architecture can reset it). Hydrate persisted
   // messages explicitly via setMessages on mount.
   useEffect(() => {
+    clearConciergeResumePending()
+
     if (initialMessages.current.length > 0) {
       setMessages(initialMessages.current)
+      return
+    }
+    // If arriving from the onboarding wizard and no prior messages exist,
+    // inject a pre-built personalised opening message as the first assistant turn.
+    if (onboardingContext) {
+      const openingText = buildOnboardingOpeningMessage(intake, onboardingContext)
+      const openingMsg: UIMessage = {
+        id: 'onboarding-opening',
+        role: 'assistant',
+        parts: [{ type: 'text', text: openingText }],
+      }
+      setMessages([openingMsg])
+      clearOnboardingContext()
     }
     // Run once on mount only
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +258,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
         const res = await fetch('/api/synthesize-brief', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: msgs, intake }),
+          body: JSON.stringify({ messages: msgs, intake, onboardingContext: onboardingContext ?? null }),
         })
         if (res.status === 422 || res.status === 429) {
           const body = (await res.json().catch(() => ({}))) as { message?: string }
@@ -247,7 +281,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
         setPhase('chat')
       }
     },
-    [intake, onHandoff, onTransferStarted, stop],
+    [intake, onboardingContext, onHandoff, onTransferStarted, stop],
   )
 
   useEffect(() => {
@@ -607,6 +641,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
       <IntentScoreDebugPanel
         userTurns={messages.filter((m) => m.role === 'user').length}
         messages={messages}
+        onboardingContext={onboardingContext}
       />
     </motion.div>
   )

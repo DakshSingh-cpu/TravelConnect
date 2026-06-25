@@ -17,6 +17,7 @@ import {
 } from '@/lib/guardrails/readiness'
 import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 import { filterByAdvisorPreferences } from '@/lib/guardrails/advisorPreferenceFilter'
+import { ensureTestAdvisorInResults } from '@/lib/guardrails/testAdvisor'
 
 export type { EnrichedMatchedAdvisorV2 }
 
@@ -92,8 +93,9 @@ export async function POST(request: Request) {
     })
 
     const enriched = enrichScoredResults(finalResults, pitchMap, intake)
+    const withTest = ensureTestAdvisorInResults(enriched, DB_PATH, intake)
     const filtered = await filterByAdvisorPreferences(
-      enriched, readinessScore, readinessTier, intake.budgetLakh ?? 0,
+      withTest, readinessScore, readinessTier, intake.budgetLakh ?? 0,
     )
 
     return NextResponse.json({

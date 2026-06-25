@@ -5,6 +5,7 @@ import { readSessionTelemetry } from '@/lib/telemetry/collector'
 import type { SessionTelemetryPayload } from '@/lib/telemetry/types'
 import type { UIMessage } from 'ai'
 import { getTextFromUIMessage } from '@/lib/chatMessages'
+import type { OnboardingContext } from '@/lib/conciergePrompt'
 
 // ─── Lightweight client-side score estimator (mirrors scoreLead.ts logic) ────
 // This is for testing/debug only. The real score is computed server-side.
@@ -60,7 +61,7 @@ const DEFLECTION_PATTERNS = [
   /\b(no idea|haven'?t decided|undecided|not (yet|really))\b/i,
 ]
 
-function analyzeConversation(messages: UIMessage[]): {
+function analyzeConversation(messages: UIMessage[], onboardingContext?: OnboardingContext | null): {
   hasTravelDates: boolean
   hasBookingIntent: boolean
   hasDeflections: boolean
@@ -70,14 +71,21 @@ function analyzeConversation(messages: UIMessage[]): {
     .map((m) => getTextFromUIMessage(m).toLowerCase())
   const combined = userMessages.join(' ')
 
-  const hasTravelDates = TRAVEL_DATE_PATTERNS.some((re) => re.test(combined))
+  // Dates from onboarding are pre-confirmed — count them even though the user
+  // didn't type them into the concierge chat.
+  const onboardingHasDates =
+    (onboardingContext?.payload?.timingMode === 'dates' &&
+      Boolean(onboardingContext.payload.travelDates?.start)) ||
+    (onboardingContext?.payload?.flexibleMonths?.length ?? 0) > 0
+
+  const hasTravelDates = onboardingHasDates || TRAVEL_DATE_PATTERNS.some((re) => re.test(combined))
   const hasBookingIntent = BOOKING_INTENT_PATTERNS.some((re) => re.test(combined))
   const hasDeflections = DEFLECTION_PATTERNS.some((re) => re.test(combined))
 
   return { hasTravelDates, hasBookingIntent, hasDeflections }
 }
 
-function computeDebugScore(t: SessionTelemetryPayload, userTurns: number, messages: UIMessage[]): {
+function computeDebugScore(t: SessionTelemetryPayload, userTurns: number, messages: UIMessage[], onboardingContext?: OnboardingContext | null): {
   score: number
   rules: RuleResult[]
   decision: 'pass' | 'block'
@@ -134,7 +142,7 @@ function computeDebugScore(t: SessionTelemetryPayload, userTurns: number, messag
 
   // TRAVEL DATES — key required signal
   if (messages.length > 0) {
-    const { hasTravelDates, hasBookingIntent, hasDeflections } = analyzeConversation(messages)
+    const { hasTravelDates, hasBookingIntent, hasDeflections } = analyzeConversation(messages, onboardingContext)
 
     if (hasTravelDates) {
       rules.push({ label: 'Travel dates mentioned ✓', delta: 10, hardBlock: false, status: 'good' })
@@ -178,6 +186,7 @@ function computeDebugScore(t: SessionTelemetryPayload, userTurns: number, messag
 type Props = {
   userTurns: number
   messages?: UIMessage[]
+  onboardingContext?: OnboardingContext | null
 }
 
 const STATUS_COLORS = {
@@ -187,7 +196,7 @@ const STATUS_COLORS = {
   neutral: { bg: '#f3f4f6', text: '#374151', dot: '#9ca3af' },
 }
 
-export default function IntentScoreDebugPanel({ userTurns, messages = [] }: Props) {
+export default function IntentScoreDebugPanel({ userTurns, messages = [], onboardingContext }: Props) {
   const [telemetry, setTelemetry] = useState<SessionTelemetryPayload | null>(null)
   const [isOpen, setIsOpen] = useState(true)
   const [isVisible, setIsVisible] = useState(false)
@@ -211,7 +220,7 @@ export default function IntentScoreDebugPanel({ userTurns, messages = [] }: Prop
 
   if (!isVisible || !telemetry) return null
 
-  const { score, rules, decision } = computeDebugScore(telemetry, userTurns, messages)
+  const { score, rules, decision } = computeDebugScore(telemetry, userTurns, messages, onboardingContext)
 
   const scoreColor =
     decision === 'block'

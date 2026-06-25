@@ -7,6 +7,19 @@ export type FunnelStep =
   | 'chat'
   | 'matching'
   | 'results'
+  | 'onboard_destination'
+  | 'onboard_trip_vibe'
+  | 'onboard_companions'
+  | 'onboard_timing'
+  | 'onboard_service_level'
+  | 'onboard_service_fee'
+  | 'onboard_priorities'
+  | 'onboard_style_budget'
+  | 'onboard_location'
+  | 'onboard_details'
+  | 'onboard_contact'
+  | 'onboard_attribution'
+  | 'onboard_complete'
 
 export type ConciergeMetrics = {
   userTurnCount: number

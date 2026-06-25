@@ -299,3 +299,33 @@
     opacity: 0.45;
   }
 }
+
+/* Budget slider thumb */
+input[type='range'].appearance-none::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--teal, #0f6e56);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 110, 86, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type='range'].appearance-none::-webkit-slider-thumb:hover,
+input[type='range'].appearance-none:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(15, 110, 86, 0.5);
+}
+
+input[type='range'].appearance-none::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--teal, #0f6e56);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 110, 86, 0.35);
+  cursor: pointer;
+}
