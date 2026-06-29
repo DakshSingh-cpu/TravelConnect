@@ -29,7 +29,7 @@ let stepEnteredAt: number | null = null
 let lastKeydownAt: number | null = null
 let turnIntervals: number[] = []
 let lastUserMessageAt: number | null = null
-let replyLatencies: number[] = []
+const replyLatencies: number[] = []
 
 function persist() {
   if (typeof window === 'undefined') return

@@ -8,6 +8,7 @@ import { advisorIdForAgency } from '@/lib/matchAdvisors'
 import { resolveCityCoords } from '@/lib/cityGeocodes'
 import type { AgentMapPin } from '@/lib/agencyDataProcessor'
 import type { EnrichedMatchedAdvisorV2 } from '@/lib/enrichResults'
+import Database from 'better-sqlite3'
 
 const TEST_AGENCY_ID = 110381
 
@@ -72,7 +73,6 @@ export function ensureTestAdvisorInResults(
   if (advisors.some((a) => a.id === testRouteId)) return advisors
 
   try {
-    const Database = require('better-sqlite3')
     const db = new Database(dbPath, { readonly: true, fileMustExist: true })
     const row = db.prepare('SELECT data FROM agencies WHERE id = ?').get(TEST_AGENCY_ID) as
       | { data: string }
