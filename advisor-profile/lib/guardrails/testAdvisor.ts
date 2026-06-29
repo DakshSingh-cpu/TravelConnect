@@ -65,6 +65,9 @@ export function ensureTestAdvisorInResults(
   dbPath: string,
   intake: MatchIntakePayload,
 ): EnrichedMatchedAdvisorV2[] {
+  // Never inject the synthetic test advisor into real match results in production.
+  if (process.env.NODE_ENV === 'production') return advisors
+
   const testRouteId = advisorIdForAgency(TEST_AGENCY_ID)
   if (advisors.some((a) => a.id === testRouteId)) return advisors
 

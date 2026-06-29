@@ -14,8 +14,20 @@ export type SeonNormalizedResult = {
 
 const SEON_API_URL = process.env.SEON_API_URL ?? 'https://api.seon.io/SeonRestService/fraud-api/v2'
 
+/**
+ * Whether to fail OPEN (proceed with no fraud signal) when SEON is unavailable.
+ *
+ * - `SEON_FAIL_OPEN=true`  → always fail open (explicit opt-in, used by e2e/dev).
+ * - `SEON_FAIL_OPEN=false` → always fail closed.
+ * - Unset → fail OPEN outside production, but fail CLOSED in production so a SEON
+ *   outage routes leads to admin quarantine (via defaultHighRisk → silent block)
+ *   instead of silently passing un-vetted leads.
+ */
 function failOpen(): boolean {
-  return process.env.SEON_FAIL_OPEN !== 'false'
+  const flag = process.env.SEON_FAIL_OPEN
+  if (flag === 'true') return true
+  if (flag === 'false') return false
+  return process.env.NODE_ENV !== 'production'
 }
 
 export async function fetchSeonResult(

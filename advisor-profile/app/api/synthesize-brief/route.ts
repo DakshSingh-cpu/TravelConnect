@@ -9,7 +9,10 @@ import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 import { getTextFromUIMessage, serializeMessagesForBrief } from '@/lib/chatMessages'
 import { requireValidIntake } from '@/lib/guardrails/intakeGate'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { verifyFunnelRequest } from '@/lib/guardrails/funnelToken'
+import { checkLlmInputLimits } from '@/lib/guardrails/llmInputLimits'
 import { normalizeAdvisorBrief } from '@/lib/guardrails/readiness'
+import { attachReadinessSignature } from '@/lib/vetting/readinessSignature'
 import { createClient } from '@/lib/supabase/server'
 
 export const maxDuration = 60
@@ -47,7 +50,9 @@ function finalizeBrief(
     score: normalized.readiness_score,
     phoneVerified: Boolean(phoneVerified),
   })
-  return normalized
+  // Sign the final (score, tier) so downstream anonymous match endpoints can
+  // trust it instead of accepting a client-forgeable number.
+  return attachReadinessSignature(normalized)
 }
 
 function buildWizardDatesSection(payload: OnboardingContextPayload | null): string {
@@ -126,6 +131,13 @@ export async function POST(req: Request) {
   const rateLimited = await checkRateLimit(req, 'synthesize-brief', '/api/synthesize-brief')
   if (rateLimited) return rateLimited
 
+  if (!verifyFunnelRequest(req)) {
+    return Response.json(
+      { error: 'Invalid or missing funnel token', code: 'FUNNEL_TOKEN_INVALID' },
+      { status: 403 },
+    )
+  }
+
   let body: SynthesizeBody
   try {
     body = await req.json()
@@ -146,6 +158,11 @@ export async function POST(req: Request) {
   const wizardDatesSection = buildWizardDatesSection(onboardingPayload)
 
   const uiMessages = Array.isArray(body.messages) ? body.messages : []
+
+  const inputLimit = checkLlmInputLimits(uiMessages)
+  if (!inputLimit.ok) {
+    return Response.json({ error: inputLimit.reason, code: inputLimit.code }, { status: 413 })
+  }
   const transcript = serializeMessagesForBrief(uiMessages)
   const userTurnCount = countUserTurns(uiMessages)
 

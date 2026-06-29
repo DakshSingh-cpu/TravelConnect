@@ -5,6 +5,7 @@ import type { Attribution } from '@/lib/attribution'
 import type { MatchIntakePayload } from '@/lib/matchAdvisors'
 import { requireValidIntake } from '@/lib/guardrails/intakeGate'
 import { deriveReadinessTier, normalizeAdvisorBrief } from '@/lib/guardrails/readiness'
+import { enforceTrustedReadiness } from '@/lib/vetting/readinessSignature'
 import { DEFAULT_READINESS_SCORE, DEFAULT_READINESS_TIER } from '@/lib/guardrails/constants'
 
 export type CreateMatchSessionInput = {
@@ -12,6 +13,8 @@ export type CreateMatchSessionInput = {
   advisorIds: number[]
   advisorBrief?: AdvisorBrief | unknown
   attribution?: Attribution | null
+  /** Optional client-supplied key to dedupe retried funnel submissions. */
+  idempotencyKey?: string | null
 }
 
 export type InsertMatchSessionResult = {
@@ -30,7 +33,7 @@ export async function insertMatchSession(
 
   const parsedBrief = input.advisorBrief ? parseAdvisorBrief(input.advisorBrief) : null
   const normalizedBrief = parsedBrief
-    ? normalizeAdvisorBrief(parsedBrief, validatedIntake)
+    ? normalizeAdvisorBrief(enforceTrustedReadiness(parsedBrief), validatedIntake)
     : null
 
   const readinessScore = normalizedBrief?.readiness_score ?? DEFAULT_READINESS_SCORE
@@ -40,6 +43,23 @@ export async function insertMatchSession(
 
   const advisorIds = input.advisorIds.filter((id) => typeof id === 'number' && id > 0)
   const attribution = input.attribution
+  const idempotencyKey = input.idempotencyKey?.trim() || null
+
+  // Idempotency: if a prior submission used the same key, return it instead of
+  // creating a duplicate funnel row.
+  if (idempotencyKey) {
+    const { data: existing } = await supabaseAdmin
+      .from('match_sessions')
+      .select('id, readiness_tier')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle()
+    if (existing) {
+      return {
+        id: existing.id,
+        readinessTier: (existing.readiness_tier as ReadinessTier | null) ?? readinessTier,
+      }
+    }
+  }
 
   const { data: inserted, error } = await supabaseAdmin
     .from('match_sessions')
@@ -61,11 +81,27 @@ export async function insertMatchSession(
       utm_content: attribution?.utm_content ?? null,
       fbclid: attribution?.fbclid ?? null,
       landed_at: attribution?.landed_at ? new Date(attribution.landed_at) : null,
+      idempotency_key: idempotencyKey,
     })
     .select('id')
     .single()
 
   if (error || !inserted) {
+    // A concurrent request with the same key may have won the race — recover by
+    // returning the existing row instead of failing.
+    if (idempotencyKey) {
+      const { data: raced } = await supabaseAdmin
+        .from('match_sessions')
+        .select('id, readiness_tier')
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle()
+      if (raced) {
+        return {
+          id: raced.id,
+          readinessTier: (raced.readiness_tier as ReadinessTier | null) ?? readinessTier,
+        }
+      }
+    }
     console.error('[insertMatchSession] Insert error:', error?.message)
     return null
   }

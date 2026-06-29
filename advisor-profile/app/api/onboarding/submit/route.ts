@@ -5,6 +5,7 @@ import { mapToMatchIntake, buildSyntheticBrief } from '@/lib/onboarding/mapToMat
 import { insertMatchSession } from '@/lib/matchSessions/insertSession'
 import type { Attribution } from '@/lib/attribution'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { attachReadinessSignature } from '@/lib/vetting/readinessSignature'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,12 +15,16 @@ const supabaseAdmin = createClient(
 type SubmitBody = {
   payload: unknown
   attribution?: Attribution | null
+  idempotencyKey?: string
+  // Honeypot: a hidden form field that real users never fill. Any non-empty
+  // value indicates an automated submission.
+  hp?: unknown
 }
 
 export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(
     request,
-    'match-sessions',
+    'onboarding-submit',
     '/api/onboarding/submit',
   )
   if (rateLimited) return rateLimited
@@ -32,6 +37,12 @@ export async function POST(request: Request) {
       { ok: false, error: 'Invalid JSON body' },
       { status: 400 },
     )
+  }
+
+  // Honeypot trap: silently reject bot submissions that fill the hidden field.
+  if (typeof body.hp === 'string' && body.hp.trim().length > 0) {
+    console.warn('[onboarding/submit] honeypot triggered — rejecting submission')
+    return NextResponse.json({ ok: false, error: 'Invalid submission' }, { status: 400 })
   }
 
   const parsed = onboardingPayloadSchema.safeParse(body.payload)
@@ -52,13 +63,16 @@ export async function POST(request: Request) {
 
   const onboardingPayload = parsed.data
   const matchIntake = mapToMatchIntake(onboardingPayload)
-  const syntheticBrief = buildSyntheticBrief(onboardingPayload)
+  // Sign the server-built synthetic brief so readiness binding (when enabled)
+  // trusts it rather than capping this legitimate, server-generated score.
+  const syntheticBrief = attachReadinessSignature(buildSyntheticBrief(onboardingPayload))
 
   const sessionResult = await insertMatchSession(supabaseAdmin, {
     intake: matchIntake,
     advisorIds: [],
     advisorBrief: syntheticBrief,
     attribution: body.attribution,
+    idempotencyKey: typeof body.idempotencyKey === 'string' ? body.idempotencyKey : null,
   })
 
   if (!sessionResult) {

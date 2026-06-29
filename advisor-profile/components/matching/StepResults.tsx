@@ -9,6 +9,7 @@ import type { MatchIntakePayload, EnrichedMatchedAdvisor } from '@/lib/matchAdvi
 import type { MatchReason } from '@/lib/matchAgenciesStage1'
 import type { AgentProfile } from '@/lib/agencyDataProcessor'
 import ChatEntryButton from '@/components/chat/ChatEntryButton'
+import { withFunnelTokenHeader } from '@/lib/guardrails/funnelTokenClient'
 
 const listVariants = {
   hidden: { opacity: 0 },
@@ -388,7 +389,7 @@ export default function StepResults({ advisors, intake, onBackToPreferences, isN
 
       const res = await fetch('/api/match-advisors/local', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await withFunnelTokenHeader({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           ...intake,
           userLat: geo.lat,

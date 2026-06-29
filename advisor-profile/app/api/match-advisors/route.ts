@@ -10,6 +10,7 @@ import {
 } from '@/lib/enrichResults'
 import { requireValidIntake } from '@/lib/guardrails/intakeGate'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { verifyFunnelRequest } from '@/lib/guardrails/funnelToken'
 import {
   buildReadinessBlockedMatchResponse,
   deriveReadinessTier,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/guardrails/readiness'
 import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 import { filterByAdvisorPreferences } from '@/lib/guardrails/advisorPreferenceFilter'
+import { enforceTrustedReadiness } from '@/lib/vetting/readinessSignature'
 import { ensureTestAdvisorInResults } from '@/lib/guardrails/testAdvisor'
 
 export type { EnrichedMatchedAdvisorV2 }
@@ -32,6 +34,13 @@ const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
 export async function POST(request: Request) {
   const rateLimited = await checkRateLimit(request, 'match-advisors', '/api/match-advisors')
   if (rateLimited) return rateLimited
+
+  if (!verifyFunnelRequest(request)) {
+    return NextResponse.json(
+      { error: 'Invalid or missing funnel token', code: 'FUNNEL_TOKEN_INVALID' },
+      { status: 403 },
+    )
+  }
 
   let json: unknown
   try {
@@ -50,7 +59,7 @@ export async function POST(request: Request) {
   if (json && typeof json === 'object' && 'advisorBrief' in json) {
     const raw = parseAdvisorBrief((json as { advisorBrief: unknown }).advisorBrief)
     if (raw) {
-      advisorBrief = normalizeAdvisorBrief(raw, intake)
+      advisorBrief = normalizeAdvisorBrief(enforceTrustedReadiness(raw), intake)
     }
   }
 

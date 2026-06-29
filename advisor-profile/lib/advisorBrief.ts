@@ -34,6 +34,11 @@ export const advisorBriefSchema = z.object({
     .max(3)
     .default([])
     .describe('Signals that reduced the score'),
+  // Server-issued HMAC over (readiness_score, readiness_tier), set by
+  // /api/synthesize-brief. Lets downstream match endpoints trust the readiness
+  // they receive instead of accepting a client-forgeable number. Optional so
+  // legacy/fallback briefs and the LLM schema output remain valid.
+  readiness_sig: z.string().optional(),
 })
 
 export type AdvisorBrief = z.infer<typeof advisorBriefSchema>

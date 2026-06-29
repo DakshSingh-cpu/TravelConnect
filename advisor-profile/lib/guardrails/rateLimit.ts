@@ -2,13 +2,15 @@ import { NextResponse } from 'next/server'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
-export type RateLimitBucket = 'chat' | 'synthesize-brief' | 'match-advisors' | 'match-sessions' | 'leads-request' | 'leads-respond' | 'admin-override'
+export type RateLimitBucket = 'chat' | 'synthesize-brief' | 'match-advisors' | 'match-advisors-local' | 'match-sessions' | 'onboarding-submit' | 'leads-request' | 'leads-respond' | 'admin-override'
 
 const BUCKET_LIMITS: Record<RateLimitBucket, { requests: number; window: `${number} s` | `${number} m` }> = {
   chat: { requests: 15, window: '1 m' },
   'synthesize-brief': { requests: 8, window: '1 m' },
   'match-advisors': { requests: 30, window: '1 m' },
+  'match-advisors-local': { requests: 30, window: '1 m' },
   'match-sessions': { requests: 10, window: '1 m' },
+  'onboarding-submit': { requests: 5, window: '1 m' },
   'leads-request': { requests: 10, window: '1 m' },
   'leads-respond': { requests: 20, window: '1 m' },
   'admin-override': { requests: 10, window: '1 m' },
@@ -28,12 +30,19 @@ function getClientIp(request: Request): string {
   return 'anonymous'
 }
 
+function upstashConfigured(): boolean {
+  return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+}
+
 function getLimiter(bucket: RateLimitBucket): Ratelimit | null {
   const url = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) {
     if (process.env.NODE_ENV === 'production' && !warnedMissingEnv) {
-      console.warn('[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting disabled')
+      console.error('[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set — failing closed in production')
+      warnedMissingEnv = true
+    } else if (process.env.NODE_ENV !== 'production' && !warnedMissingEnv) {
+      console.warn('[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set — rate limiting disabled (non-production)')
       warnedMissingEnv = true
     }
     return null
@@ -61,16 +70,46 @@ export function rateLimitJsonBody() {
   }
 }
 
+function rateLimitUnavailableResponse(route: string, bucket: RateLimitBucket): NextResponse {
+  console.error('[rate-limit] failing closed — limiter unavailable', { route, bucket })
+  return NextResponse.json(
+    {
+      blocked: true as const,
+      code: 'RATE_LIMIT_UNAVAILABLE' as const,
+      message: 'Service temporarily unavailable. Please try again shortly.',
+    },
+    { status: 503, headers: { 'Retry-After': '30' } },
+  )
+}
+
 export async function checkRateLimit(
   request: Request,
   bucket: RateLimitBucket,
   route: string,
 ): Promise<NextResponse | null> {
   const limiter = getLimiter(bucket)
-  if (!limiter) return null
+
+  if (!limiter) {
+    // Fail closed in production when Upstash is not configured; in non-production
+    // rate limiting is simply disabled so local/dev work is unaffected.
+    if (process.env.NODE_ENV === 'production' && !upstashConfigured()) {
+      return rateLimitUnavailableResponse(route, bucket)
+    }
+    return null
+  }
 
   const ip = getClientIp(request)
-  const { success, reset } = await limiter.limit(ip)
+
+  let success: boolean
+  let reset: number
+  try {
+    ;({ success, reset } = await limiter.limit(ip))
+  } catch (err) {
+    // Transient Redis/network error: stay available rather than taking down the
+    // route, but record it so the outage is visible.
+    console.error('[rate-limit] limiter error — allowing request', { route, bucket, err: String(err) })
+    return null
+  }
 
   if (success) return null
 

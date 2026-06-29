@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { isAdminUser } from '@/lib/admin/isAdmin'
+import { resolveIsAdmin } from '@/lib/admin/isAdmin'
 import { fetchQuarantineLeads } from '@/lib/admin/fetchQuarantineLeads'
 
 const supabaseAdmin = createClient(
@@ -19,13 +19,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('users')
-    .select('account_role')
-    .eq('id', user.id)
-    .single()
-
-  if (!isAdminUser({ account_role: profile?.account_role ?? 'traveller', email: user.email })) {
+  if (!(await resolveIsAdmin(supabaseAdmin, user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 

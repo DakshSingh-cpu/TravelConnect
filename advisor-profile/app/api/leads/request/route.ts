@@ -89,6 +89,25 @@ export async function POST(request: Request) {
     )
   }
 
+  // IDOR guard: match_sessions are anonymous, so ownership is established by the
+  // first traveller to bind a lead_assignment to the session. Reject any session
+  // already claimed by a different traveller before performing service-role
+  // writes (residential_zip / telemetry) or creating an assignment for it.
+  const { data: foreignClaim } = await supabaseAdmin
+    .from('lead_assignments')
+    .select('traveller_user_id')
+    .eq('match_session_id', matchSessionId)
+    .neq('traveller_user_id', user.id)
+    .limit(1)
+    .maybeSingle()
+
+  if (foreignClaim) {
+    return NextResponse.json(
+      { ok: false, error: 'This match session belongs to another user.', code: 'SESSION_FORBIDDEN' },
+      { status: 403 },
+    )
+  }
+
   if (residentialZip) {
     const zipCheck = zipSchema.safeParse(residentialZip.trim())
     if (!zipCheck.success) {

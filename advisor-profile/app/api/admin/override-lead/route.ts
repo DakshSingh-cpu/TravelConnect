@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
-import { isAdminUser } from '@/lib/admin/isAdmin'
+import { resolveIsAdmin } from '@/lib/admin/isAdmin'
 import { adminOverrideLead } from '@/lib/vetting/adminOverrideLead'
 
 const supabaseAdmin = createClient(
@@ -23,15 +23,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('users')
-    .select('account_role, id')
-    .eq('id', user.id)
-    .single()
-
-  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.id)
-
-  if (!isAdminUser({ account_role: profile?.account_role ?? 'traveller', email: authUser?.user?.email })) {
+  if (!(await resolveIsAdmin(supabaseAdmin, user.id))) {
     return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
   }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { todayLocalISO } from './dates'
 
 export const companionOptions = ['solo', 'partner', 'kids', 'friends'] as const
 export type Companion = (typeof companionOptions)[number]
@@ -87,6 +88,38 @@ export const step03Schema = z.object({
   flexibleMonths: z.array(z.enum(flexibleMonths)).optional(),
 })
 
+/**
+ * Step 03 with runtime date guards layered on top of the base shape.
+ *
+ * Rejects travel dates in the past (anchored to the traveller's current local
+ * date) and an end date earlier than the start. Kept separate from
+ * `step03Schema` so the base object's `.shape` stays available for the full
+ * payload schema below.
+ */
+export const step03ValidationSchema = step03Schema.superRefine((data, ctx) => {
+  if (data.timingMode !== 'dates') return
+
+  const today = todayLocalISO()
+  const start = data.travelDates?.start
+  const end = data.travelDates?.end
+
+  if (start && start < today) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Start date can't be in the past.",
+      path: ['travelDates', 'start'],
+    })
+  }
+
+  if (end && ((start && end < start) || end < today)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End date must be on or after the start date.',
+      path: ['travelDates', 'end'],
+    })
+  }
+})
+
 export const step04Schema = z.object({
   serviceLevel: z.enum(serviceLevelOptions),
 })
@@ -153,7 +186,7 @@ export const stepSchemas = [
   step01Schema,       // destination
   stepTripVibeSchema, // trip-vibe (optional)
   step02Schema,       // companions
-  step03Schema,       // timing
+  step03ValidationSchema, // timing
   step04Schema,       // service-level
   step05Schema,       // priorities (optional)
   step06Schema,       // style-budget

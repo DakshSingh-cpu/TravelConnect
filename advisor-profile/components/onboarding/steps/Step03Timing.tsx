@@ -6,6 +6,7 @@ import {
   staggerItemVariants,
 } from '@/lib/motion/onboardingVariants'
 import ChipSelect, { type ChipOption } from '@/components/onboarding/inputs/ChipSelect'
+import { todayLocalISO } from '@/lib/onboarding/dates'
 
 type Props = {
   timingMode: 'dates' | 'flexible' | undefined
@@ -43,6 +44,17 @@ export default function Step03Timing({
   flexibleMonths: selectedMonths,
   onChange,
 }: Props) {
+  const today = todayLocalISO()
+  const start = travelDates?.start
+  const end = travelDates?.end
+  const startInPast = !!start && start < today
+  const endBeforeStart = !!end && ((!!start && end < start) || end < today)
+  const dateError = startInPast
+    ? "Start date can't be in the past."
+    : endBeforeStart
+    ? 'End date must be on or after the start date.'
+    : null
+
   return (
     <motion.div
       variants={staggerContainerVariants}
@@ -103,6 +115,7 @@ export default function Step03Timing({
               <input
                 id="travel-start"
                 type="date"
+                min={today}
                 value={travelDates?.start ?? ''}
                 onChange={(e) =>
                   onChange({
@@ -110,6 +123,7 @@ export default function Step03Timing({
                   })
                 }
                 aria-label="Travel start date"
+                aria-invalid={startInPast}
                 className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-colors duration-150 focus:ring-2"
                 style={{
                   borderColor: 'var(--border, rgba(28,25,23,0.09))',
@@ -131,6 +145,7 @@ export default function Step03Timing({
               <input
                 id="travel-end"
                 type="date"
+                min={travelDates?.start || today}
                 value={travelDates?.end ?? ''}
                 onChange={(e) =>
                   onChange({
@@ -138,6 +153,7 @@ export default function Step03Timing({
                   })
                 }
                 aria-label="Travel end date"
+                aria-invalid={endBeforeStart}
                 className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-colors duration-150 focus:ring-2"
                 style={{
                   borderColor: 'var(--border, rgba(28,25,23,0.09))',
@@ -149,6 +165,16 @@ export default function Step03Timing({
               />
             </div>
           </motion.div>
+
+          {dateError && (
+            <motion.p
+              variants={staggerItemVariants}
+              role="alert"
+              className="-mt-2 text-sm font-medium text-red-600"
+            >
+              {dateError}
+            </motion.p>
+          )}
 
           <motion.div variants={staggerItemVariants}>
             <ChipSelect

@@ -36,9 +36,17 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# supabase CLI local state (project ref, pooler url)
+/supabase/.temp/
+
+# generated matching database (built via npm run build:match-index)
+/data/match.db
+/data/match.db-*
 
 # typescript
 *.tsbuildinfo

@@ -81,7 +81,15 @@ let _db: Database.Database | null = null
 
 export function getMatchDb(dbPath: string): Database.Database {
   if (!_db) {
-    _db = new Database(dbPath, { readonly: true, fileMustExist: true })
+    try {
+      _db = new Database(dbPath, { readonly: true, fileMustExist: true })
+    } catch (err) {
+      throw new Error(
+        `[match-db] Required SQLite database is missing or unreadable at "${dbPath}". ` +
+          'Build it with `npm run build:match-index`, or ensure data/match.db ships with the ' +
+          `deployment. Underlying error: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
     _db.pragma('journal_mode = WAL')
   }
   return _db

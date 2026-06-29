@@ -19,6 +19,7 @@ type RequestBody = {
   intake: MatchIntakePayload
   attribution?: Attribution | null
   advisorBrief?: AdvisorBrief | unknown
+  idempotencyKey?: string
 }
 
 /**
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { advisors, intake, attribution, advisorBrief: rawBrief } = body
+  const { advisors, intake, attribution, advisorBrief: rawBrief, idempotencyKey } = body
 
   if (!intake || !Array.isArray(advisors)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
     advisorIds,
     advisorBrief: rawBrief,
     attribution,
+    idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : null,
   })
 
   if (!created) {

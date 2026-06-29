@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/ensure-match-db.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -15,7 +17,6 @@
     "build:match-index": "node scripts/build-agency-match-index.mjs"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.78",
     "@ai-sdk/google": "^3.0.75",
     "@ai-sdk/react": "^3.0.186",
     "@react-leaflet/core": "^3.0.0",

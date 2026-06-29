@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import { isAdminUser } from '@/lib/admin/isAdmin'
+import { resolveIsAdmin } from '@/lib/admin/isAdmin'
 import QuarantineShell from '@/components/admin/QuarantineShell'
 
 const supabaseAdmin = createClient(
@@ -21,13 +21,7 @@ export default async function AdminQuarantinePage() {
 
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabaseAdmin
-    .from('users')
-    .select('account_role')
-    .eq('id', user.id)
-    .single()
-
-  if (!isAdminUser({ account_role: profile?.account_role ?? 'traveller', email: user.email })) {
+  if (!(await resolveIsAdmin(supabaseAdmin, user.id))) {
     redirect('/')
   }
 

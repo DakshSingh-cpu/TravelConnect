@@ -1,5 +1,6 @@
 import type { AdvisorBrief, ReadinessTier } from '@/lib/advisorBrief'
 import type { EnrichedMatchedAdvisor, MatchIntakePayload } from '@/lib/matchAdvisors'
+import { withFunnelTokenHeader } from '@/lib/guardrails/funnelTokenClient'
 
 export type GuardrailErrorCode = 'INTAKE_BLOCKED' | 'RATE_LIMITED' | 'READINESS_BLOCKED'
 
@@ -34,7 +35,7 @@ export async function fetchMatchedAdvisors(
 ): Promise<MatchFetchResult> {
   const res = await fetch('/api/match-advisors', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await withFunnelTokenHeader({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ ...payload, advisorBrief: brief ?? undefined }),
   })
 

@@ -17,6 +17,8 @@ import type { OnboardingContext } from '@/lib/conciergePrompt'
 import { buildOnboardingOpeningMessage } from '@/lib/conciergePrompt'
 import { clearOnboardingContext } from '@/lib/conciergePrompt'
 import { clearConciergeResumePending } from '@/lib/onboarding/resumeConcierge'
+import { ensureFunnelToken, withFunnelTokenHeader } from '@/lib/guardrails/funnelTokenClient'
+import { FUNNEL_TOKEN_HEADER } from '@/lib/guardrails/funnelTokenShared'
 import {
   flushConciergeTurn,
   recordConciergeKeydown,
@@ -182,7 +184,14 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
         body: { intake, onboardingContext: onboardingContext ?? null },
         fetch: async (input, init) => {
           setRateLimitError(null)
-          const res = await fetch(input, init)
+          const token = await ensureFunnelToken()
+          const nextInit: RequestInit = init ?? {}
+          if (token) {
+            const headers = new Headers(nextInit.headers)
+            headers.set(FUNNEL_TOKEN_HEADER, token)
+            nextInit.headers = headers
+          }
+          const res = await fetch(input, nextInit)
           if (res.headers.get('X-Intake-Blocked') === 'true') {
             setIntakeBlocked(true)
           }
@@ -257,7 +266,7 @@ export default function StepAIConcierge({ intake, onHandoff, onBack, onTransferS
       try {
         const res = await fetch('/api/synthesize-brief', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await withFunnelTokenHeader({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ messages: msgs, intake, onboardingContext: onboardingContext ?? null }),
         })
         if (res.status === 422 || res.status === 429) {

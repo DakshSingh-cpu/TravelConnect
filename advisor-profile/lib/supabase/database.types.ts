@@ -110,6 +110,13 @@ export type Database = {
           landed_at: string | null
           lead_status: 'pending' | 'accepted' | 'blocked' | 'exhausted' | null
           residential_zip: string | null
+          onboarding_payload: Json | null
+          contact_name: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          self_reported_source: string | null
+          verified_phone: string | null
+          idempotency_key: string | null
         }
         Insert: {
           id?: string
@@ -130,10 +137,26 @@ export type Database = {
           utm_content?: string | null
           fbclid?: string | null
           landed_at?: string | null
-          lead_status?: 'pending' | 'accepted' | 'exhausted' | null
+          lead_status?: 'pending' | 'accepted' | 'blocked' | 'exhausted' | null
+          residential_zip?: string | null
+          onboarding_payload?: Json | null
+          contact_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          self_reported_source?: string | null
+          verified_phone?: string | null
+          idempotency_key?: string | null
         }
         Update: {
-          lead_status?: 'pending' | 'accepted' | 'exhausted' | null
+          lead_status?: 'pending' | 'accepted' | 'blocked' | 'exhausted' | null
+          residential_zip?: string | null
+          onboarding_payload?: Json | null
+          contact_name?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          self_reported_source?: string | null
+          verified_phone?: string | null
+          idempotency_key?: string | null
         }
         Relationships: []
       }

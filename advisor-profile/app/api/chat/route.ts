@@ -10,10 +10,19 @@ import { getTextFromUIMessage } from '@/lib/chatMessages'
 import { parseAndValidateIntake } from '@/lib/intakeValidation'
 import { createIntakeBlockedConciergeResponse } from '@/lib/guardrails/intakeBlockedStream'
 import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { verifyFunnelRequest } from '@/lib/guardrails/funnelToken'
+import { checkLlmInputLimits, logLlmUsage } from '@/lib/guardrails/llmInputLimits'
 
 export const maxDuration = 60
 
 const MAX_RETRIES = 3
+
+function jsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
 
 /** Visible reply budget. Kept high so Gemini thinking tokens cannot truncate mid-sentence. */
 const CONCIERGE_MAX_OUTPUT_TOKENS = 2048
@@ -43,17 +52,27 @@ export async function POST(req: Request) {
   const rateLimited = await checkRateLimit(req, 'chat', '/api/chat')
   if (rateLimited) return rateLimited
 
+  if (!verifyFunnelRequest(req)) {
+    return jsonResponse(
+      { error: 'Invalid or missing funnel token', code: 'FUNNEL_TOKEN_INVALID' },
+      403,
+    )
+  }
+
   let body: ChatRequestBody
   try {
     body = await req.json()
   } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: 'Invalid JSON body' }, 400)
   }
 
   const messages = Array.isArray(body.messages) ? body.messages : []
+
+  const inputLimit = checkLlmInputLimits(messages)
+  if (!inputLimit.ok) {
+    return jsonResponse({ error: inputLimit.reason, code: inputLimit.code }, 413)
+  }
+
   const onboardingContext = body.onboardingContext ?? null
   const intakeValidation = parseAndValidateIntake(body.intake)
   if (!intakeValidation.success) {
@@ -72,6 +91,16 @@ export async function POST(req: Request) {
   const intake: MatchIntakePayload = intakeValidation.data
 
   if (!hasGeminiApiKey()) {
+    // The mock stream auto-approves handoff and must never run in production —
+    // fail loudly so the misconfiguration/outage is visible instead of silently
+    // degrading the product.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[chat] GOOGLE_GENERATIVE_AI_API_KEY missing in production')
+      return jsonResponse(
+        { error: 'Concierge is temporarily unavailable. Please try again shortly.', code: 'LLM_UNAVAILABLE' },
+        503,
+      )
+    }
     return createMockConciergeResponse(messages, intake)
   }
 
@@ -163,6 +192,9 @@ export async function POST(req: Request) {
           },
           stopWhen: stepCountIs(5),
           tools,
+          onFinish: ({ usage }) => {
+            logLlmUsage('/api/chat', modelId, usage, { messageCount: messages.length })
+          },
         })
 
         return result.toUIMessageStreamResponse()
@@ -180,10 +212,14 @@ export async function POST(req: Request) {
     // Exhausted retries for this model — move to next
   }
 
-  // All models exhausted — fall back to mock response
-  console.error(
-    '[chat] All Gemini models rate-limited or failed. Falling back to demo mode.',
-    lastError,
-  )
+  // All models exhausted. In production, surface a real error instead of silently
+  // serving the demo stream (which auto-approves handoff and changes behaviour).
+  console.error('[chat] All Gemini models rate-limited or failed.', lastError)
+  if (process.env.NODE_ENV === 'production') {
+    return jsonResponse(
+      { error: 'Concierge is busy right now. Please try again in a moment.', code: 'LLM_UNAVAILABLE' },
+      503,
+    )
+  }
   return createMockConciergeResponse(messages, intake)
 }

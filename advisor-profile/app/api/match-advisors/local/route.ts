@@ -8,6 +8,8 @@ import {
 import { matchAgenciesLocal } from '@/lib/matchAgenciesStage1'
 import { rerankWithLlm } from '@/lib/rerankAdvisors'
 import { enrichScoredResults, type EnrichedMatchedAdvisorV2 } from '@/lib/enrichResults'
+import { checkRateLimit } from '@/lib/guardrails/rateLimit'
+import { verifyFunnelRequest } from '@/lib/guardrails/funnelToken'
 import {
   buildReadinessBlockedMatchResponse,
   deriveReadinessTier,
@@ -15,6 +17,7 @@ import {
 } from '@/lib/guardrails/readiness'
 import { DEFAULT_READINESS_SCORE } from '@/lib/guardrails/constants'
 import { filterByAdvisorPreferences } from '@/lib/guardrails/advisorPreferenceFilter'
+import { enforceTrustedReadiness } from '@/lib/vetting/readinessSignature'
 import { ensureTestAdvisorInResults } from '@/lib/guardrails/testAdvisor'
 
 const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
@@ -29,6 +32,16 @@ const DB_PATH = path.join(process.cwd(), 'data', 'match.db')
  * Returns: { proximityAdvisors: EnrichedMatchedAdvisorV2[], rerankSource, meta }
  */
 export async function POST(request: Request) {
+  const rateLimited = await checkRateLimit(request, 'match-advisors-local', '/api/match-advisors/local')
+  if (rateLimited) return rateLimited
+
+  if (!verifyFunnelRequest(request)) {
+    return NextResponse.json(
+      { error: 'Invalid or missing funnel token', code: 'FUNNEL_TOKEN_INVALID' },
+      { status: 403 },
+    )
+  }
+
   let localReq: LocalMatchRequest
   let advisorBrief = null
 
@@ -45,7 +58,7 @@ export async function POST(request: Request) {
 
     if (json && typeof json === 'object' && 'advisorBrief' in json) {
       const raw = parseAdvisorBrief((json as { advisorBrief: unknown }).advisorBrief)
-      if (raw) advisorBrief = normalizeAdvisorBrief(raw, localReq)
+      if (raw) advisorBrief = normalizeAdvisorBrief(enforceTrustedReadiness(raw), localReq)
     }
   } catch {
     return NextResponse.json(
