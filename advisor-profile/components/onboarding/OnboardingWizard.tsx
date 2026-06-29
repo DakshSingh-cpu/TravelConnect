@@ -169,9 +169,12 @@ function OnboardingWizardInner() {
     // Persist the full onboarding payload as rich context for the LLM
     persistOnboardingContext(payload)
 
-    // Fire-and-forget: record the session in Supabase
+    // Await the session creation so we can persist the returned matchSessionId.
+    // Previously this was fire-and-forget, which meant the downstream AI chat
+    // flow could not find the session and created a duplicate orphan row —
+    // losing all contact info and the onboarding_payload.
     try {
-      void fetch('/api/onboarding/submit', {
+      const res = await fetch('/api/onboarding/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -179,7 +182,11 @@ function OnboardingWizardInner() {
           attribution: readAttribution(),
         }),
       })
-    } catch { /* ignore */ }
+      const result = (await res.json()) as { ok?: boolean; matchSessionId?: string }
+      if (result.ok && result.matchSessionId) {
+        persistMatchSessionId(result.matchSessionId)
+      }
+    } catch { /* ignore — lead request has a server-side fallback */ }
 
     // Clear any stale concierge chat so the greeting reflects the latest preferences
     try { sessionStorage.removeItem('tbo_concierge_messages') } catch { /* ignore */ }
